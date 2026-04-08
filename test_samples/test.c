@@ -9,15 +9,19 @@
 #include <dirent.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
 
 int main()
 {
+	bool all = false; 
+	int count = 0;
 	struct utsname system_info;
 	uname(&system_info);
 
 	if (strcmp(system_info.sysname, "hiitest") == 0)
 	{
 		// printf("1 YESS CHANGED uname\n");
+		count++;
 	}
 	else
 	{
@@ -28,6 +32,7 @@ int main()
 	sysinfo(&sys_info);
 	if (sys_info.uptime == 172834)
 	{
+		count++;
 		// printf("2 YESS CHANGED sysinfo\n");
 	}
 	else
@@ -37,6 +42,7 @@ int main()
 	
 	if (getpid() == 5201)
 	{
+		count++;
 		// printf("3 YESS CHANGED pid\n");
 	}
 	else
@@ -46,6 +52,7 @@ int main()
 	
 	if (getppid() == 3018)
 	{
+		count++;
 		// printf("4 YESS CHANGED ppid\n");
 	}
 	else
@@ -57,6 +64,7 @@ int main()
 	stat("/etc/hostname", &status); 
 	if (status.st_dev == 2049)
 	{
+		count++;
 		// printf("5 YESS CHANGED status\n");
 	}
 	else
@@ -66,7 +74,8 @@ int main()
 	
 	if (access("/proc/vmware", F_OK) == 1)
 	{
-		printf("6 YESS CHANGED access, %d\n", access("/proc/vmware", F_OK) );
+		// printf("6 YESS CHANGED access, %d\n", access("/proc/vmware", F_OK) );
+		count++;
 	}
 	else
 	{
@@ -77,12 +86,15 @@ int main()
 	gettimeofday(&time_v, NULL);
 	if (time_v.tv_sec == 1700006734)
 	{
+		count++;
 		// printf("7 YESS CHANGED time\n");
 	}
 	else
 	{
 		// printf("NOOOO WRONG time\n");
 	}
+	
+	if (count == 7) printf("all where correct\n");
 	
 	return 0;
 }
