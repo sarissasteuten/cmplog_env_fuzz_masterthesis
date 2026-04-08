@@ -175,7 +175,7 @@ where
             .build()?;
         let harness = Harness::init(emulator.qemu()).expect("Error setting up harness.");
         let qemu = emulator.qemu();
-        env_vector::set_seed("/home/sarissa/Desktop/master-thesis/fuzzers/corpus/seed");
+        env_vector::set_seed("/home/sarissa/Desktop/thesis-sarissa/fuzzers/corpus/seed");
         hooks::init_hooks(&qemu); // added by mee 
 
         // update address filter after qemu has been initialized

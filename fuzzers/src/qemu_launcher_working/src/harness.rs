@@ -103,9 +103,9 @@ impl Harness {
                 // init the evn vector of current env_vec
                 // eprintln!("uptime: {}\n", env_vec.sysinfo.uptime);
                 // eprintln!("pid: {}\n", env_vec.pid_ret);
-                if(env_vec.acces_ret == 1){
-                        eprintln!("access: {}\n", env_vec.acces_ret);
-                }
+                // if(env_vec.acces_ret == 1){
+                //         eprintln!("access: {}\n", env_vec.acces_ret);
+                // }
                 crate::env_vector::set_current(env_vec);
 
         // self.qemu.write_mem(self.input_addr, buf).map_err(|e| {
