@@ -1,3 +1,4 @@
+// use crate::hooks;
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::{
@@ -11,7 +12,8 @@ use clap::Parser;
 use libafl::events::{EventConfig, Launcher};
 use libafl::{
     events::{ClientDescription, SimpleEventManager},
-    monitors::{tui::TuiMonitor, Monitor, MultiMonitor},
+    // monitors::{tui::TuiMonitor, Monitor, MultiMonitor},
+    monitors::{MultiMonitor, Monitor},
     Error,
 };
 #[cfg(not(feature = "simplemgr"))]
@@ -44,11 +46,12 @@ impl Fuzzer {
 
     pub fn fuzz(&self) -> Result<(), Error> {
         if self.options.tui {
-            let monitor = TuiMonitor::builder()
-                .title("QEMU Launcher")
-                .version("0.13.1")
-                .enhanced_graphics(true)
-                .build();
+            // let monitor = TuiMonitor::builder()
+            //     .title("QEMU Launcher")
+            //     .version("0.13.1")
+            //     .enhanced_graphics(true)
+            //     .build();
+            let monitor = MultiMonitor::new(|s| println!("{s}"));
             self.launch(monitor)
         } else {
             let log = self.options.log.as_ref().and_then(|l| {
@@ -62,27 +65,29 @@ impl Fuzzer {
 
             #[cfg(unix)]
             let wrapped_stdout = {
-                // We forward all outputs to dev/null, but keep a copy around for the fuzzer output.
-                //
-                // # Safety
-                // stdout and stderr should still be open at this point in time.
-                let (new_stdout, new_stderr) = unsafe { dup_and_mute_outputs()? };
+                // uitgecomment voor output
+                // // We forward all outputs to dev/null, but keep a copy around for the fuzzer output.
+                // //
+                // // # Safety
+                // // stdout and stderr should still be open at this point in time.
+                // let (new_stdout, new_stderr) = unsafe { dup_and_mute_outputs()? };
 
-                // If we are debugging, re-enable target stderror.
-                if std::env::var("LIBAFL_FUZZBENCH_DEBUG").is_ok() {
-                    // # Safety
-                    // Nobody else uses the new stderror here.
-                    unsafe {
-                        dup2(new_stderr, io::stderr().as_raw_fd())?;
-                    }
-                }
+                // // If we are debugging, re-enable target stderror.
+                // if std::env::var("LIBAFL_FUZZBENCH_DEBUG").is_ok() {
+                //     // # Safety
+                //     // Nobody else uses the new stderror here.
+                //     unsafe {
+                //         dup2(new_stderr, io::stderr().as_raw_fd())?;
+                //     }
+                // }
 
-                // # Safety
-                // The new stdout is open at this point, and we will don't use it anywhere else.
-                #[cfg(unix)]
-                unsafe {
-                    File::from_raw_fd(new_stdout)
-                }
+                // // # Safety
+                // // The new stdout is open at this point, and we will don't use it anywhere else.
+                // #[cfg(unix)]
+                // unsafe {
+                //     File::from_raw_fd(new_stdout)
+                // }
+                unsafe { File::from_raw_fd(1) }
             };
 
             let stdout_cpy = RefCell::new(wrapped_stdout);

@@ -1,4 +1,6 @@
 //! A libfuzzer-like fuzzer using qemu for binary-only coverage
+mod hooks_harness;
+mod stream;
 #[cfg(target_os = "linux")]
 mod client;
 #[cfg(target_os = "linux")]

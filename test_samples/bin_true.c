@@ -1,7 +1,8 @@
-execve("/bin/true", ["/bin/true"], 0x7ffedbe1d590 /* 31 vars */) = 0 // not faked 
+execve("/bin/true", ["/bin/true"], 0x7ffedbe1d590 /* 31 vars */) = 0 // not faked // starts the program bin/true
 brk(NULL)                               = 0x5ac55bf2a000 // not faking 
-mmap(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7121ef14c000 // not faking 
-access("/etc/ld.so.preload", R_OK)      = -1 ENOENT (No such file or directory) // could be skipt
+mmap(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7121ef14c000 // not faking, (can be used to check how much memory is available)lm klopt niet volgensmij -> usually done with sysinfo 
+// has a lot of side effects
+access("/etc/ld.so.preload", R_OK)      = -1 ENOENT (No such file or directory) // could be skipt // checks wheter specific files exist, so yesss hooking 
 openat(AT_FDCWD, "/etc/ld.so.cache", O_RDONLY|O_CLOEXEC) = 3 // could be skip , actually not 
 fstat(3, {st_mode=S_IFREG|0644, st_size=25015, ...}) = 0 // fake it 
 mmap(NULL, 25015, PROT_READ, MAP_PRIVATE, 3, 0) = 0x7121ef145000

@@ -1,3 +1,4 @@
+use crate::stream;
 use libafl::{
     executors::ExitKind,
     inputs::{BytesInput, HasTargetBytes},
@@ -31,8 +32,12 @@ impl Harness {
         let elf = EasyElf::from_file(qemu.binary_path(), &mut elf_buffer)?;
 
         let start_pc = elf
-            .resolve_symbol("LLVMFuzzerTestOneInput", qemu.load_addr())
-            .ok_or_else(|| Error::empty_optional("Symbol LLVMFuzzerTestOneInput not found"))?;
+            // .resolve_symbol("LLVMFuzzerTestOneInput", qemu.load_addr())
+            // .ok_or_else(|| Error::empty_optional("Symbol LLVMFuzzerTestOneInput not found"))?;
+            // change start to main, want de binaries zijn niet libaflfuzzer stijl achtig 
+            .resolve_symbol("main", qemu.load_addr()) // changed for main
+            .expect("Symbol main not found"); // changed for main
+            log::info!("main @ {start_pc:#x}");
         Ok(start_pc)
     }
 
@@ -94,6 +99,8 @@ impl Harness {
         }
         let len = len as GuestReg;
 
+        stream::set_current_stream(buf);
+
         self.qemu.write_mem(self.input_addr, buf).map_err(|e| {
             Error::unknown(format!(
                 "Failed to write to memory@{:#x}: {e:?}",
@@ -112,6 +119,8 @@ impl Harness {
         self.qemu
             .write_return_address(self.ret_addr)
             .map_err(|e| Error::unknown(format!("Failed to write return address: {e:?}")))?;
+
+        // moet deze twee hieronder nog ff checken:
 
         self.qemu
             .write_function_argument(0, self.input_addr)

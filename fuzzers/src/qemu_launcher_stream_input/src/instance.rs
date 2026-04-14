@@ -1,3 +1,5 @@
+use crate::hooks_harness;
+use crate::stream;
 use core::fmt::Debug;
 use std::{fs, ops::Range, process};
 
@@ -173,6 +175,9 @@ where
             .build()?;
         let harness = Harness::init(emulator.qemu()).expect("Error setting up harness.");
         let qemu = emulator.qemu();
+        hooks_harness::init_hooks(&qemu); // hooks init toegevoegd
+        stream::set_seed("/home/sarissa/Desktop/thesis-sarissa/fuzzers/corpus/seed");
+         // STREAM NOG ZETTEN!!
 
         // update address filter after qemu has been initialized
         emulator.modules_mut()
