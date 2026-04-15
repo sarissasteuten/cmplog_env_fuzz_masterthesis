@@ -40,8 +40,7 @@ extern "C" fn pre_hooks(
 ) -> SyscallHookResult {
     
     let qemu = unsafe { libafl_qemu::Qemu::get_unchecked() };
-    // let env = crate::env_vector::get_current();
-
+    
     match sys_num{
          SYS_ACCESS =>  {
             let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_ACCESS, crate::stream::SIZE_ACCESS);
@@ -54,7 +53,7 @@ extern "C" fn pre_hooks(
         SYS_FSTAT =>  {
             // let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_FSTAT, crate::stream::SIZE_FSTAT);
             // let ret = i32::from_le_bytes(bytes.as_slice().try_into().unwrap());
-            let ret = -1; // place holder
+            let ret = 0; // place holder
 
             println!("pre hook FSTAT\n");
             println!("print the ret {} \n", ret);
@@ -63,7 +62,7 @@ extern "C" fn pre_hooks(
         SYS_PRLIMIT64 =>  {
             // let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_PRLIMIT64, crate::stream::SIZE_PRLIMIT64);
             // let ret = i32::from_le_bytes(bytes.as_slice().try_into().unwrap());
-            let ret = -1; // place holder
+            let ret = 0; // place holder
 
             println!("pre hook PRLIMIT64\n");
             println!("print the ret {} \n", ret);
@@ -72,13 +71,16 @@ extern "C" fn pre_hooks(
         SYS_PREAD64 =>  {
             // let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_PREAD64, crate::stream::SIZE_PREAD64);
             // let ret = i32::from_le_bytes(bytes.as_slice().try_into().unwrap());
-            let ret = -1; // place holder
+            let ret = 0; // place holder
 
             println!("pre hook PREAD64\n");
             println!("print the ret {} \n", ret);
             SyscallHookResult::Skip(ret as GuestAddr)
         },
-        _ => SyscallHookResult::Run
+        _ => {
+            // println!("pre hook num {}\n", sys_num);
+             SyscallHookResult::Run
+        }
 
     }
 }

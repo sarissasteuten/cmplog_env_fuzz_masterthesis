@@ -42,6 +42,7 @@ impl Harness {
         log::info!("start_pc @ {start_pc:#x}");
 
         qemu.entry_break(start_pc);
+        println!("start pc die er is {:#x}\n", start_pc);
 
         let ret_addr: GuestAddr = qemu
             .read_return_address()

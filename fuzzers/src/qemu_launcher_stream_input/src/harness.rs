@@ -31,13 +31,16 @@ impl Harness {
         let mut elf_buffer = Vec::new();
         let elf = EasyElf::from_file(qemu.binary_path(), &mut elf_buffer)?;
 
-        let start_pc = elf
-            // .resolve_symbol("LLVMFuzzerTestOneInput", qemu.load_addr())
-            // .ok_or_else(|| Error::empty_optional("Symbol LLVMFuzzerTestOneInput not found"))?;
-            // change start to main, want de binaries zijn niet libaflfuzzer stijl achtig 
-            .resolve_symbol("main", qemu.load_addr()) // changed for main
-            .expect("Symbol main not found"); // changed for main
-            log::info!("main @ {start_pc:#x}");
+        let start_pc = elf.entry_point(qemu.load_addr()) // want /bin/true heeft geen main
+                        .expect("entry point errorrr\n");
+
+        // let start_pc = elf
+        //     // .resolve_symbol("LLVMFuzzerTestOneInput", qemu.load_addr())
+        //     // .ok_or_else(|| Error::empty_optional("Symbol LLVMFuzzerTestOneInput not found"))?;
+        //     // change start to main, want de binaries zijn niet libaflfuzzer stijl achtig 
+        //     .resolve_symbol("main", qemu.load_addr()) // changed for main
+        //     .expect("Symbol main not found"); // changed for main
+        //     log::info!("main @ {start_pc:#x}");
         Ok(start_pc)
     }
 

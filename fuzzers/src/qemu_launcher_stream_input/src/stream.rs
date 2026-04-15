@@ -29,9 +29,21 @@ pub const SIZE_PREAD64: usize = 256;
 pub fn set_seed(path: &str){
     let mut buf = vec![0u8; STREAM_SIZE]; // init with zero's
 
-    let access: i32 = 0;
+    let access: i32 = -1;
     buf[OFFSET_ACCESS..OFFSET_ACCESS + SIZE_ACCESS].copy_from_slice(&access.to_le_bytes());
-    std::fs::write(path,buf).expect("cannot writeeee\n");
+    // std::fs::write(path,buf).expect("cannot writeeee seed\n");
+
+    // let fstat: i32 = -1;
+    // buf[OFFSET_FSTAT..OFFSET_FSTAT + SIZE_FSTAT].copy_from_slice(&fstat.to_le_bytes());
+    // // std::fs::write(path,buf).expect("cannot writeeee seed\n");
+
+    // let prlimit: i32 = -1;
+    // buf[OFFSET_PRLIMIT64..OFFSET_PRLIMIT64+ SIZE_ACCESS].copy_from_slice(&prlimit.to_le_bytes());
+    // // std::fs::write(path,buf).expect("cannot writeeee seed\n");
+
+    // let pread64: i32 = -1;
+    // buf[OFFSET_PREAD64..OFFSET_PREAD64 + SIZE_ACCESS].copy_from_slice(&pread64.to_le_bytes());
+    std::fs::write(path,buf).expect("cannot writeeee seed\n");
     println!("printed seeed");
 }
 
