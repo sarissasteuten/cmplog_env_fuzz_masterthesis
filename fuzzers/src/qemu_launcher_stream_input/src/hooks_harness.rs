@@ -1,6 +1,6 @@
 // mod env_vector;
 // mod stream;
-use crate::stream;
+// use crate::stream;
 // hooks the syscalls
 // reads the right segment from the byte stream at the correct offset 
 // using prehooks for syscalls with no side effects
@@ -11,13 +11,13 @@ use libafl_qemu::{
 };
 
 use libafl_qemu::GuestAddr;
-const SYS_UNAME: i32 = 63;
-const SYS_SYSINFO: i32 = 99;
-const SYS_GETPID: i32 = 39;
-const SYS_GETPPID: i32 = 110;
-const SYS_STAT: i32 = 262; //actually newafstat
-const SYS_GETDENTS: i32 = 78;
-const SYS_GETTIMEOFDAY: i32 = 96;
+// const SYS_UNAME: i32 = 63;
+// const SYS_SYSINFO: i32 = 99;
+// const SYS_GETPID: i32 = 39;
+// const SYS_GETPPID: i32 = 110;
+// const SYS_STAT: i32 = 262; //actually newafstat
+// const SYS_GETDENTS: i32 = 78;
+// const SYS_GETTIMEOFDAY: i32 = 96;
 
 const SYS_ACCESS: i32 = 21;
 const SYS_FSTAT: i32 = 5;
@@ -51,31 +51,23 @@ extern "C" fn pre_hooks(
             SyscallHookResult::Skip(ret as GuestAddr)
         },
         SYS_FSTAT =>  {
-            // let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_FSTAT, crate::stream::SIZE_FSTAT);
+            let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_FSTAT, crate::stream::SIZE_FSTAT);
             // let ret = i32::from_le_bytes(bytes.as_slice().try_into().unwrap());
-            let ret = 0; // place holder
+            // let ret = 0; // place holder
+            qemu.write_mem(_a1, &bytes).unwrap();
 
             println!("pre hook FSTAT\n");
-            println!("print the ret {} \n", ret);
-            SyscallHookResult::Skip(ret as GuestAddr)
+            // println!("print the ret {} \n", ret);
+            SyscallHookResult::Skip(0)
         },
         SYS_PRLIMIT64 =>  {
-            // let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_PRLIMIT64, crate::stream::SIZE_PRLIMIT64);
+            let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_PRLIMIT64, crate::stream::SIZE_PRLIMIT64);
             // let ret = i32::from_le_bytes(bytes.as_slice().try_into().unwrap());
-            let ret = 0; // place holder
-
+            // let ret = 0; // place holder
+            qemu.write_mem(_a2, &bytes).unwrap();
             println!("pre hook PRLIMIT64\n");
-            println!("print the ret {} \n", ret);
-            SyscallHookResult::Skip(ret as GuestAddr)
-        },
-        SYS_PREAD64 =>  {
-            // let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_PREAD64, crate::stream::SIZE_PREAD64);
-            // let ret = i32::from_le_bytes(bytes.as_slice().try_into().unwrap());
-            let ret = 0; // place holder
-
-            println!("pre hook PREAD64\n");
-            println!("print the ret {} \n", ret);
-            SyscallHookResult::Skip(ret as GuestAddr)
+            // println!("print the ret {} \n", ret);
+            SyscallHookResult::Skip(0)
         },
         _ => {
             // println!("pre hook num {}\n", sys_num);
@@ -104,21 +96,43 @@ extern "C" fn post_hooks(
 
     match sys_num{
        SYS_OPENAT =>  {
-            // let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_OPENAT, crate::stream::SIZE_OPENAT);
-            // let ret = i32::from_le_bytes(bytes.as_slice().try_into().unwrap());
-
+            let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_OPENAT, crate::stream::SIZE_OPENAT);
+            let stream_ret = i32::from_le_bytes(bytes.as_slice().try_into().unwrap());
             println!("post hook OPENAT\n");
-            println!("print the ret {} \n", ret);
-            ret
+            // println!("print the ret {} \n", ret);
+
+            if stream_ret == -1 {
+                stream_ret as GuestAddr
+            } else{
+                ret
+            }
+            // alleen hooken als de return value is aangepast in de stream naar -1       
+            // what if it expects a file to exits that doesnt????     
         },
         SYS_READ =>  {
-            // let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_READ, crate::stream::SIZE_READ);
+            let nbytes = _a2 as usize;
+            let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_READ, nbytes);
             // let ret = i32::from_le_bytes(bytes.as_slice().try_into().unwrap());
+            qemu.write_mem(_a1, &bytes).unwrap();
 
             println!("post hook READ\n");
-            println!("print the ret {} \n", ret);
+            // println!("print the ret {} \n", ret);
             ret
         },
+         SYS_PREAD64 =>  {
+            // let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_PREAD64, crate::stream::SIZE_PREAD64);
+            // let ret = i32::from_le_bytes(bytes.as_slice().try_into().unwrap());
+            // let ret = 0; // place holder
+            let nbytes = _a2 as usize;
+            let offset = _a3 as usize;
+            let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_READ, nbytes + offset);
+            // let ret = i32::from_le_bytes(bytes.as_slice().try_into().unwrap());
+            qemu.write_mem(_a1, &bytes).unwrap();
+
+            println!("post hook PREAD64\n");
+            // println!("print the ret {} \n", ret);
+            ret 
+        }
         _ => ret
 
     }
