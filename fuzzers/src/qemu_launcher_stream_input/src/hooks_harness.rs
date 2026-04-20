@@ -50,28 +50,26 @@ extern "C" fn pre_hooks(
             println!("print the ret {} \n", ret);
             SyscallHookResult::Skip(ret as GuestAddr)
         },
-        SYS_FSTAT =>  {
-            let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_FSTAT, crate::stream::SIZE_FSTAT);
-            // let ret = i32::from_le_bytes(bytes.as_slice().try_into().unwrap());
-            // let ret = 0; // place holder
-            qemu.write_mem(_a1, &bytes).unwrap();
-
-            println!("pre hook FSTAT\n");
-            // println!("print the ret {} \n", ret);
-            SyscallHookResult::Skip(0)
-        },
+        //   SYS_FSTAT =>  {
+        //     let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_FSTAT, crate::stream::SIZE_FSTAT);
+        //     qemu.write_mem(_a1, &bytes).unwrap(); // nog toevoegen dat t na post hook alleen de value overwrite die verandert is 
+        //     println!("pre hook FSTAT\n");
+        //     SyscallHookResult::Skip(0)
+        // },
         SYS_PRLIMIT64 =>  {
-            let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_PRLIMIT64, crate::stream::SIZE_PRLIMIT64);
-            // let ret = i32::from_le_bytes(bytes.as_slice().try_into().unwrap());
-            // let ret = 0; // place holder
-            qemu.write_mem(_a2, &bytes).unwrap();
-            println!("pre hook PRLIMIT64\n");
-            // println!("print the ret {} \n", ret);
-            SyscallHookResult::Skip(0)
+            
+            if _a2 == 0 { // in dit geval wordt er gelezen van de env (en er worden dus niet gezet)
+                let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_PRLIMIT64, crate::stream::SIZE_PRLIMIT64);
+                qemu.write_mem(_a3, &bytes).unwrap();
+                println!("pre hook PRLIMIT64\n");
+                SyscallHookResult::Skip(0)
+            } else { // anders worden er waarden gezet dus dan gwn laten gaaaan
+                SyscallHookResult::Run
+            }
         },
         _ => {
             // println!("pre hook num {}\n", sys_num);
-             SyscallHookResult::Run
+            SyscallHookResult::Run
         }
 
     }
@@ -111,28 +109,28 @@ extern "C" fn post_hooks(
         },
         SYS_READ =>  {
             let nbytes = _a2 as usize;
-            let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_READ, nbytes);
-            // let ret = i32::from_le_bytes(bytes.as_slice().try_into().unwrap());
+            let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_READ, nbytes.min(crate::stream::SIZE_READ));
             qemu.write_mem(_a1, &bytes).unwrap();
-
             println!("post hook READ\n");
             // println!("print the ret {} \n", ret);
-            ret
+            nbytes as GuestAddr
         },
-         SYS_PREAD64 =>  {
-            // let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_PREAD64, crate::stream::SIZE_PREAD64);
-            // let ret = i32::from_le_bytes(bytes.as_slice().try_into().unwrap());
-            // let ret = 0; // place holder
+        SYS_PREAD64 =>  {
             let nbytes = _a2 as usize;
-            let offset = _a3 as usize;
-            let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_READ, nbytes + offset);
-            // let ret = i32::from_le_bytes(bytes.as_slice().try_into().unwrap());
-            qemu.write_mem(_a1, &bytes).unwrap();
+            // let offset = _a3 as usize;
 
+            let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_PREAD64, nbytes.min(crate::stream::SIZE_PREAD64));
+            qemu.write_mem(_a1, &bytes).unwrap();
             println!("post hook PREAD64\n");
             // println!("print the ret {} \n", ret);
-            ret 
+            nbytes as GuestAddr
         }
+        SYS_FSTAT =>  {
+            let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_FSTAT, crate::stream::SIZE_FSTAT);
+            qemu.write_mem(_a1, &bytes).unwrap(); // nog toevoegen dat t na post hook alleen de value overwrite die verandert is 
+            println!("pre hook FSTAT\n");
+            ret
+        },
         _ => ret
 
     }
@@ -141,7 +139,7 @@ extern "C" fn post_hooks(
 
 pub fn init_hooks(qemu: &Qemu){
     qemu.hooks().add_pre_syscall_hook(0u64, pre_hooks);
-    // qemu.hooks().add_post_syscall_hook(0u64, post_hooks);
+    qemu.hooks().add_post_syscall_hook(0u64, post_hooks);
 }
 
 // extern "C" fn hooks(
