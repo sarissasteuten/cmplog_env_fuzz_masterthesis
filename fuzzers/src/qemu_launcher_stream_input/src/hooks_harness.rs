@@ -25,6 +25,7 @@ const SYS_OPENAT: i32 = 257;
 const SYS_PRLIMIT64: i32 = 302;
 const SYS_READ: i32 = 0;
 const SYS_PREAD64: i32 = 17;
+const SYS_EXIT_GROUP: i32 = 231;
 
 extern "C" fn pre_hooks(
     _data: u64,
@@ -42,7 +43,15 @@ extern "C" fn pre_hooks(
     let qemu = unsafe { libafl_qemu::Qemu::get_unchecked() };
     
     match sys_num{
-         SYS_ACCESS =>  {
+        SYS_EXIT_GROUP =>{
+            println!("EXIT THE RUN\n\n");
+            let qemu = unsafe{
+                libafl_qemu::Qemu::get_unchecked()
+            };
+            qemu.trigger_breakpoint();
+            SyscallHookResult::Skip(0)
+        },
+        SYS_ACCESS =>  {
             let bytes = crate::stream::get_current_bytes(crate::stream::OFFSET_ACCESS, crate::stream::SIZE_ACCESS);
             let ret = i32::from_le_bytes(bytes.as_slice().try_into().unwrap());
 
