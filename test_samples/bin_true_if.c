@@ -41,6 +41,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
+#include <stdlib.h>
 
 int main() {
 	
@@ -49,26 +50,24 @@ int main() {
 	if (access("/etc/ld.so.preload", R_OK) == 0)
 	{
 		printf("ACCESS: file exists\n");
-	} else {
-		printf("ACCESS: doesnt exist\n");
+		abort();
+		
 	}
 	int fd = openat(AT_FDCWD, "/etc/ld.so.cache", O_RDONLY|O_CLOEXEC);
 	struct stat st;
 	fstat(fd, &st);
-	if (st.st_size > 1000000)
+	if (st.st_size == 0x41414141)
 	{
-		printf("FSTAT: st_size > 1000000\n");
-	} else {
-		printf("FSTAT: not larger\n");
-	}
-	
+		printf("FSTAT VALUE FOUND == 0x41414141\n");
+		__builtin_trap();
+	} 
 	void *m2 = mmap(NULL, 25015, PROT_READ, MAP_PRIVATE, fd, 0);
 	close(fd);
 	int fd2 = openat(AT_FDCWD, "/lib/x86_64-linux-gnu/libc.so.6", O_RDONLY|O_CLOEXEC);
 	char buf[832];
 	read(fd2, buf, 832);
 	char buf2[784];
-	pread(fd2, buf2, 784, 64);
+	pread64(fd2, buf2, 784, 64);
 	fstat(fd2, &st);
 	pread(fd2, buf2, 784, 64);
 	void *m3 = mmap(NULL, 2170256, PROT_READ, MAP_PRIVATE|MAP_DENYWRITE, fd2, 0);
@@ -76,12 +75,11 @@ int main() {
 	void *m4 = mmap(NULL, 12288, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
 	struct rlimit rl;
 	prlimit(0, RLIMIT_STACK, NULL, &rl);
-	if (rl.rlim_max == 8192 * 1024)
+	if (rl.rlim_max == 0x41414141)
 	{
-		printf("PRLIMIT: rlimit max is the normal stack size\n");
-	} else {
-		printf("PRLIMIT: sanbox size\n");
-	}
+		printf("MAXX PRLIMIT\n");
+		__builtin_trap();
+	} 
 	munmap(m2, 25015);
 	
 	return 0;
