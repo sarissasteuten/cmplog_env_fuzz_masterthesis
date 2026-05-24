@@ -1,34 +1,3 @@
-// execve("/bin/true", ["/bin/true"], 0x7ffedbe1d590 /* 31 vars */) = 0 // not faked // starts the program bin/true
-// brk(NULL)                               = 0x5ac55bf2a000 // not faking 
-// mmap(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7121ef14c000 // not faking, (can be used to check how much memory is available)lm klopt niet volgensmij -> usually done with sysinfo 
-// // has a lot of side effects
-// access("/etc/ld.so.preload", R_OK)      = -1 ENOENT (No such file or directory) // could be skipt // checks wheter specific files exist, so yesss hooking 
-// openat(AT_FDCWD, "/etc/ld.so.cache", O_RDONLY|O_CLOEXEC) = 3 // could be skip , actually not 
-// fstat(3, {st_mode=S_IFREG|0644, st_size=25015, ...}) = 0 // fake it 
-// mmap(NULL, 25015, PROT_READ, MAP_PRIVATE, 3, 0) = 0x7121ef145000
-// close(3)                                = 0
-// openat(AT_FDCWD, "/lib/x86_64-linux-gnu/libc.so.6", O_RDONLY|O_CLOEXEC) = 3
-// read(3, "\177ELF\2\1\1\3\0\0\0\0\0\0\0\0\3\0>\0\1\0\0\0\220\243\2\0\0\0\0\0"..., 832) = 832
-// pread64(3, "\6\0\0\0\4\0\0\0@\0\0\0\0\0\0\0@\0\0\0\0\0\0\0@\0\0\0\0\0\0\0"..., 784, 64) = 784
-// fstat(3, {st_mode=S_IFREG|0755, st_size=2125328, ...}) = 0
-// pread64(3, "\6\0\0\0\4\0\0\0@\0\0\0\0\0\0\0@\0\0\0\0\0\0\0@\0\0\0\0\0\0\0"..., 784, 64) = 784
-// mmap(NULL, 2170256, PROT_READ, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0x7121eee00000
-// mmap(0x7121eee28000, 1605632, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRITE, 3, 0x28000) = 0x7121eee28000
-// mmap(0x7121eefb0000, 323584, PROT_READ, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRITE, 3, 0x1b0000) = 0x7121eefb0000
-// mmap(0x7121eefff000, 24576, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRITE, 3, 0x1fe000) = 0x7121eefff000
-// mmap(0x7121ef005000, 52624, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOUS, -1, 0) = 0x7121ef005000
-// close(3)                                = 0
-// mmap(NULL, 12288, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7121ef142000
-// arch_prctl(ARCH_SET_FS, 0x7121ef142740) = 0
-// set_tid_address(0x7121ef142a10)         = 2826
-// set_robust_list(0x7121ef142a20, 24)     = 0
-// rseq(0x7121ef143060, 0x20, 0, 0x53053053) = 0
-// mprotect(0x7121eefff000, 16384, PROT_READ) = 0
-// mprotect(0x5ac5320f0000, 4096, PROT_READ) = 0
-// mprotect(0x7121ef184000, 8192, PROT_READ) = 0
-// prlimit64(0, RLIMIT_STACK, NULL, {rlim_cur=8192*1024, rlim_max=RLIM64_INFINITY}) = 0
-// munmap(0x7121ef145000, 25015)           = 0
-// exit_group(0)                           = ?
 #define _GNU_SOURCE
 #include <sys/utsname.h>
 #include <sys/sysinfo.h>
@@ -42,23 +11,54 @@
 #include <string.h>
 #include <fcntl.h>
 #include <stdlib.h>
+// #include <string.h>
+#include <sys/syscall.h>
+#include <dirent.h>
+#include <stdint.h>
 
 int main() {
+
+	struct utsname uts;
+	uname(&uts);
+	// printf("uts machine = %s\n",uts.sysname);
+
+	// if (strcmp(uts.sysname, "LL") == 0) {
+	// if (memcmp(uts.sysname, "Hi", 2) == 0){
+	// 	// printf("UNAME CHECK FAILED\n");
+	// 	printf("UNAME\n");
+	// 	// __builtin_trap();
+	// 	// abort();
+	// 	return 1;
+	// }else 
+	if (*(uint16_t*)uts.sysname == 0x6948){
+		// printf("sys1 UNAME\n");
+		// __builtin_trap();
+		// abort();
+		return 1;
+
+	}else{
+		// printf("UNAME CHECK PASSED\n");
+		// __builtin_trap();
+		// return 1;
+	}
+
 	
 	brk(NULL);
 	void *m1 = mmap(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
 	if (access("/etc/ld.so.preload", R_OK) == 0)
 	{
-		printf("ACCESS: file exists\n");
+		// printf("sys2 ACCESS: file exists\n");
 		abort();
 		
 	}
 	int fd = openat(AT_FDCWD, "/etc/ld.so.cache", O_RDONLY|O_CLOEXEC);
 	struct stat st;
 	fstat(fd, &st);
-	if (st.st_size == 0x41414141)
+	// printf("stsize = %ld\n",st.st_size);
+
+	if (st.st_size == 0x44444444)
 	{
-		printf("FSTAT VALUE FOUND == 0x41414141\n");
+		// printf("sys3 FSTAT VALUE FOUND == 0x41414141\n");
 		__builtin_trap();
 	} 
 	void *m2 = mmap(NULL, 25015, PROT_READ, MAP_PRIVATE, fd, 0);
@@ -77,10 +77,79 @@ int main() {
 	prlimit(0, RLIMIT_STACK, NULL, &rl);
 	if (rl.rlim_max == 0x41414141)
 	{
-		printf("MAXX PRLIMIT\n");
+		// printf("sys5 MAXX PRLIMIT\n");
 		__builtin_trap();
 	} 
+
+	int fd6 = open("/proc/cpuinfo", O_RDONLY);
+	if (fd6 >= 0) {
+
+		char buf[2048] = {0};
+		read(fd6, buf, sizeof(buf)-1);
+		if (*(uint32_t*)buf == 0x69696969) {
+			// printf("sys10 HYPERVISOR FOUND\n");
+			return 1;
+		}
+	}
+
 	munmap(m2, 25015);
+	struct sysinfo info;
+	sysinfo(&info);
+
+	if (info.totalram < (2ULL * 1024 * 1024 * 1024)) {
+		// printf("sys6 SYSINFO\n");
+		return 1;
+	}else{
+		// printf("HIGH RAM DETECTED\n");
+	}
+
+	char buf3[256];
+
+	ssize_t n = readlink("/proc/self/exe", buf3, sizeof(buf3) - 1);
+
+	if (n > 0) {
+		buf3[n] = '\0';
+
+		// printf("HIERERERER\n");
+		// printf("buf3 = %s\n", buf3);
+		if (strstr(buf3, "qemu")) {
+			// printf("QEMU DETECTED\n");
+			return 1;
+		}
+		if (n == 0x41) {
+			// printf("sys7 Readlink size\n");
+			return 1;
+		}
+	}
+
+	int fd4 = open("/proc", O_RDONLY | O_DIRECTORY);
+	char buf4[4096];
+	int n4 = syscall(SYS_getdents64, fd4, buf4, sizeof(buf4));
+
+	if (n4 > 0) {
+
+		if (memmem(buf4, n4, "qemu", 4) != NULL) {
+			// printf("QEMU PROCESS FOUND\n");
+			return 1;
+		}
+	}
+	if (n4 == 0x44) {
+		// printf("sys8 GETDENTS64 HIT\n");
+		return 1;
+	}
+
+	struct stat st2;
+
+	// printf("STAT callinf\n");
+	if (stat("/proc/self/exe", &st2) == 0) {
+
+		if (st2.st_size == 0x41444144) {
+			// printf("sys9 STAT HIT\n");
+			return 1;
+		}
+	}
+
+	// ADDED 
 	
 	return 0;
 }

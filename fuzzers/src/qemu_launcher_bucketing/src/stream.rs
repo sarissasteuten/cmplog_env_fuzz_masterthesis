@@ -3,7 +3,7 @@ use crate::hooks_harness;
 use std::cell::RefCell;
 use std::collections::HashMap;
 pub const BUCKET_SIZE: usize = 4096;
-pub const N_BUCKETS: usize = 7;
+pub const N_BUCKETS: usize = 13;
 pub const STREAM_SIZE: usize = BUCKET_SIZE * N_BUCKETS;
 #[derive(Default)]
 pub struct Bucket{
@@ -24,6 +24,12 @@ const SYSCALLS: [hooks_harness::syscall_data; N_BUCKETS] = [
     hooks_harness::SYS_PRLIMIT64,
     hooks_harness::SYS_READ,
     hooks_harness::SYS_MMAP,
+    hooks_harness::SYS_UNAME,
+    hooks_harness::SYS_SYSINFO,
+    hooks_harness::SYS_READLINK,
+    hooks_harness::SYS_GETDENTS64,
+    hooks_harness::SYS_NEWFSTATAT,
+    hooks_harness::SYS_LSTAT,
 ];
 
 // #[derive(Default)]
@@ -45,6 +51,14 @@ const SYSCALLS: [hooks_harness::syscall_data; N_BUCKETS] = [
 
 pub fn set_seed(path: &str){
     let mut buf = vec![0u8; STREAM_SIZE]; // init with zero's
+    // const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyz\
+    //     ABCDEFGHIJKLMNOPQRSTUVWXYZ\
+    //     0123456789_/-.";
+
+
+    // for byte in buf.iter_mut() {
+    //     *byte = CHARSET[rand::random::<usize>() % CHARSET.len()];
+    // }
     for byte in buf.iter_mut() {
         *byte = rand::random::<u8>();
     }
