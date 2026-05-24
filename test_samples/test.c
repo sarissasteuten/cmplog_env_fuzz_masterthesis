@@ -17,10 +17,12 @@ int main()
 	int count = 0;
 	struct utsname system_info;
 	uname(&system_info);
+	
+	printf("sysname = %s\n", system_info.sysname);
 
 	if (strcmp(system_info.sysname, "hiitest") == 0)
 	{
-		// printf("1 YESS CHANGED uname\n");
+		printf("1 YESS CHANGED uname\n");
 		count++;
 	}
 	else

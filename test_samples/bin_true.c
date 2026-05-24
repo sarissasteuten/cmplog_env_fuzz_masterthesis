@@ -65,6 +65,7 @@ int main() {
 	struct rlimit rl;
 	prlimit(0, RLIMIT_STACK, NULL, &rl);
 	munmap(m2, 25015);
+	// while (1){}
 	
 	return 0;
 }

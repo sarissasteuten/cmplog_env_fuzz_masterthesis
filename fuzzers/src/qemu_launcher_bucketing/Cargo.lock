@@ -2191,6 +2191,7 @@ dependencies = [
  "libafl_bolts",
  "libafl_qemu",
  "libafl_targets",
+ "libc",
  "log",
  "mimalloc",
  "rand 0.8.6",

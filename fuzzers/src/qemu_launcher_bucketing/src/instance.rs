@@ -479,7 +479,7 @@ where
                     println!("Failed to load initial corpus at {corpus_dirs:?}");
                     process::exit(0);
                 });
-            println!("We imported {} inputs from disk.", state.corpus().count());
+            println!("We imported {} inputs from disk {corpus_dirs:?}.", state.corpus().count());
         }
 
         /*
