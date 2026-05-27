@@ -2,6 +2,7 @@
 mod hooks_harness;
 mod stream;
 mod class_path;
+mod syscalls;
 #[cfg(target_os = "linux")]
 mod client;
 #[cfg(target_os = "linux")]

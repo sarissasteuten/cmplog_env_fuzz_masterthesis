@@ -17,7 +17,7 @@ static void benign_decoy() {
 
 	volatile uint64_t x = 0;
 
-	for (uint64_t i = 0; i < 10000; i++) {
+	for (uint64_t i = 0; i < 1000; i++) {
 		x ^= (i * 0x1337);
 	}
 }
@@ -49,8 +49,8 @@ int main() {
 		return 0;
 
 	// wont get thourgh this yet probs
-	if (!strstr(uts.sysname, "Linux"))
-	    return 0;
+	// if (!strstr(uts.sysname, "Linux"))
+	//     return 0;
 
 	// if (!strstr(uts.machine, "x86_64"))
 	//     return 0;
@@ -112,17 +112,17 @@ int main() {
 	close(status_fd);
 
 	// wont get thourgh this yet probs
-	if (memmem(
-			status_buf,
-			sizeof(status_buf),
-			"Trace\t0",
-			1
-		) == NULL)
-	{
-		benign_decoy();
+	// if (memmem(
+	// 		status_buf,
+	// 		sizeof(status_buf),
+	// 		"TracerPid:\t0",
+	// 		12
+	// 	) == NULL)
+	// {
+	// 	benign_decoy();
 
-		return 0;
-	}
+	// 	return 0;
+	// }
 	
 	printf("---------- STAGE 4 TRACER_CHECK\n");
 
@@ -140,7 +140,7 @@ int main() {
 
 	exe_path[n] = '\0';
 
-	if (!strstr(exe_path, "qemu"))
+	if (strstr(exe_path, "qemu"))
 		return 0;
 
 	if (strstr(exe_path, "sandbox"))
@@ -176,7 +176,7 @@ int main() {
 	if (memmem(dentbuf, dent_n, "wireshark", 9))
 		return 0;
 
-	if (!memmem(dentbuf, dent_n, "strace", 6))
+	if (memmem(dentbuf, dent_n, "strace", 6))
 		return 0;
 
 	if (memmem(dentbuf, dent_n, "qemu", 4))

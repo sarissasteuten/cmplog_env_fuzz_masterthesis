@@ -47,35 +47,53 @@ int main() {
 		return 0;
 
 	// wont get thourgh this yet probs
-	if (!strstr(uts.sysname, "Linux"))
-	    return 0;
 
-	if (!strstr(uts.machine, "x86_64"))
-	    return 0;
+	// printf(
+	// 	"bytes=%02x %02x %02x %02x\n",
+	// 	(unsigned char)uts.sysname[0],
+	// 	(unsigned char)uts.sysname[1],
+	// 	(unsigned char)uts.sysname[2],
+	// 	(unsigned char)uts.sysname[3]
+	// );
 
+
+	// if (!strstr(uts.sysname, "Linux"))
+	// 	return 0;
+		
+	// printf("hier");
+	
+	// if (!strstr(uts.machine, "x86_64"))
+	// 	return 0;
+	// if (*(uint32_t*)uts.sysname != 0x756e694c)
+	// return 0;
+	
 	if (strstr(uts.release, "azure"))
 		return 0;
 
 	if (strstr(uts.machine, "i686"))
 		return 0;
 
-	printf("Part1 done\n");
+	printf("-- STAGE 1 UNAME_PROFILE \n");
+	printf("hier2");
 	
 
 	struct sysinfo info;
+	printf("hier3");
 
 	if (sysinfo(&info) != 0)
 		return 0;
+	printf("hier4");
 
 
-	if (info.totalram < (4ULL * 1024 * 1024 * 1024))
+	if (info.totalram != (4ULL * 1024 * 1024 * 1024))
 		return 0;
+	printf("hier5");
 
 
 	if (info.uptime < 600)
 		return 0;
 
-	printf("Part2 done\n");
+	printf("---- STAGE 2 RESOURCE_PROFILE\n");
 
 	char exe_path[256];
 
@@ -103,7 +121,7 @@ int main() {
 	if (access("/dev/vboxguest", F_OK) == 0)
 		return 0;
 
-	printf("Part3 done\n");
+	printf("------ STAGE 3 EXECUTION_CONTEX\n");
 	int proc_fd = open("/proc", O_RDONLY | O_DIRECTORY);
 
 	if (proc_fd < 0)
@@ -135,7 +153,7 @@ int main() {
 	if (memmem(dentbuf, dent_n, "qemu", 4))
 		return 0;
 
-	printf("Part4 done\n");
+	printf("-------- STAGE 4 PROCESS_INSPECTION\n");
 	int cpu_fd = open("/proc/cpuinfo", O_RDONLY);
 
 	if (cpu_fd < 0)
@@ -150,7 +168,7 @@ int main() {
 	if (strstr(cpuinfo, "hypervisor"))
 		return 0;
 
-	printf("Part5 done\n");
+	printf("---------- STAGE 5 CPU_ENVIRONMENT\n");
 	struct rlimit rl;
 
 	if (prlimit(0, RLIMIT_STACK, NULL, &rl) != 0)
@@ -159,7 +177,7 @@ int main() {
 	if (rl.rlim_max < (8 * 1024 * 1024))
 		return 0;
 
-	printf("Part6 done\n");
+	printf("------------ STAGE 6 RESOURCE_LIMITS\n");
 	struct stat st;
 
 	if (stat("/proc/self/exe", &st) != 0)
@@ -168,7 +186,7 @@ int main() {
 	if (st.st_uid == 1337)
 		return 0;
 
-	printf("Part7 done\n");
+	printf("-------------- STAGE 7 FILE_METADATA\n");
 	if (strstr(exe_path, "analysis")) {
 
 		decoy_stage();
