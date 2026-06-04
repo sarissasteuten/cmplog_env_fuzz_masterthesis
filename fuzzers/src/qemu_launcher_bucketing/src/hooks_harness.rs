@@ -47,12 +47,12 @@ extern "C" fn pre_hooks(
     _a7: GuestAddr,
 ) -> SyscallHookResult {
     let qemu = unsafe { libafl_qemu::Qemu::get_unchecked() };
-    println!("PRE HOOKS {} \n", sys_num);
+    // println!("PRE HOOKS {} \n", sys_num);
 
     match sys_num {
         n if n == syscalls::SYS_EXIT.num || n == syscalls::SYS_EXIT_GROUP.num => {
             // handling exit
-            println!("HOOK exit");
+            // println!("HOOK exit");
             if let Some(cpu) = qemu.current_cpu() {
                 cpu.trigger_breakpoint();
             }
@@ -60,26 +60,26 @@ extern "C" fn pre_hooks(
         }
 
         n if n == syscalls::SYS_UNAME.num => {
-            println!("HOOK UNAME");
+            // println!("HOOK UNAME");
             write_fuzzed_bytes(
                 &qemu,
                 _a0,
                 syscalls::SYS_UNAME.num,
                 syscalls::SYS_UNAME.consume_size,
             );
-            println!("end HOOK UNAME");
+            // println!("end HOOK UNAME");
             SyscallHookResult::Skip(0)
         }
 
         n if n == syscalls::SYS_SYSINFO.num => {
-            println!("IN HOOK SYSINFO");
+            // println!("IN HOOK SYSINFO");
             write_fuzzed_bytes(
                 &qemu,
                 _a0,
                 syscalls::SYS_SYSINFO.num,
                 syscalls::SYS_SYSINFO.consume_size,
             );
-            println!("IN HOOK SYSINFOEND");
+            // println!("IN HOOK SYSINFOEND");
             SyscallHookResult::Skip(0)
         }
 

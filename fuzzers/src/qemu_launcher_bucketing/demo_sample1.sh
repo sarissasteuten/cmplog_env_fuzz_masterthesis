@@ -9,14 +9,14 @@ echo "RUNNING BASELINE with sample 1"
 echo "------------------------"
 
 timeout 60s \
-./target/debug/qemu_launcher \
+./target/release/qemu_launcher \
   --input ~/Desktop/thesis-sarissa/fuzzers/corpus \
   --output ~/Desktop/thesis-sarissa/results_baseline/output \
   --cores 0-1 \
   --verbose \
   -- ~/Desktop/thesis-sarissa/test_samples/sample1 \
   > baseline_sample1.log 2>&1
-# | tee basline_sample1.log
+# # | tee basline_sample1.log
   
 
 echo "------------------------"
@@ -31,7 +31,7 @@ echo "RUNNING CMPLOG with sample 1"
 echo "------------------------"
 
 timeout 60s \
-./target/debug/qemu_launcher \
+./target/release/qemu_launcher \
   --input ~/Desktop/thesis-sarissa/fuzzers/corpus \
   --output ~/Desktop/thesis-sarissa/results_cmplog/output \
   --cores 0-1 \

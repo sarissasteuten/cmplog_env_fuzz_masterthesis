@@ -56,14 +56,17 @@ int main() {
 	// 	(unsigned char)uts.sysname[3]
 	// );
 
+	// printf("uts.sysname = \"%s\"\n", uts.sysname);
 
-	// if (!strstr(uts.sysname, "Linux"))
-	// 	return 0;
+	if (!strstr(uts.sysname, "Linux"))
+		return 0;
 		
 	// printf("hier");
 	
-	// if (!strstr(uts.machine, "x86_64"))
-	// 	return 0;
+	if (!strstr(uts.machine, "x86_64"))
+		return 0;
+		
+	printf("uts.machine = \"%s\"\n", uts.machine);
 	// if (*(uint32_t*)uts.sysname != 0x756e694c)
 	// return 0;
 	
@@ -74,7 +77,7 @@ int main() {
 		return 0;
 
 	printf("-- STAGE 1 UNAME_PROFILE \n");
-	printf("hier2");
+	// printf("hier2");
 	
 
 	struct sysinfo info;
@@ -109,7 +112,7 @@ int main() {
 
 	exe_path[n] = '\0';
 
-	if (strstr(exe_path, "qemu"))
+	if (!strstr(exe_path, "qemu"))
 		return 0;
 
 	if (strstr(exe_path, "sandbox"))

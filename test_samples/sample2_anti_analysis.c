@@ -50,10 +50,10 @@ int main() {
 
 	// wont get thourgh this yet probs
 	if (!strstr(uts.sysname, "Linux"))
-	    return 0;
+		return 0;
 
-	// if (!strstr(uts.machine, "x86_64"))
-	//     return 0;
+	if (!strstr(uts.machine, "x86_64"))
+		return 0;
 
 	if (strstr(uts.release, "azure"))
 		return 0;
@@ -137,18 +137,24 @@ int main() {
 
 	if (n <= 0)
 		return 0;
+	
+	printf("HERE1");
 
 	exe_path[n] = '\0';
+	printf("HERE2");
 
 	if (!strstr(exe_path, "qemu"))
 		return 0;
 
+	printf("HERE4");
 	if (strstr(exe_path, "sandbox"))
 		return 0;
 
+	printf("HERE5");
 	if (strstr(exe_path, "sample"))
 		return 0;
 
+	printf("HERE6");
 	printf("------------ STAGE 5 EXECUTION_CONTEXT\n");
 
 	int proc_fd = open("/proc", O_RDONLY | O_DIRECTORY);

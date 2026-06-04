@@ -13,7 +13,7 @@ use libafl::{
 };
 use libafl_bolts::{rands::StdRand, tuples::tuple_list};
 use libafl_qemu::modules::{
-    asan_guest::AsanGuestModule, asan_host::AsanHostModule, cmplog::CmpLogModule,
+    asan_guest::AsanGuestModule, asan_host::AsanHostModule, cmplog::{CmpLogModule, CmpLogRoutinesModule},
     utils::filters::StdAddressFilter, DrCovModule, InjectionModule,
 };
 
@@ -194,6 +194,7 @@ impl Client<'_> {
                     args,
                     tuple_list!(
                         CmpLogModule::default(),
+                        CmpLogRoutinesModule::new(StdAddressFilter::default()),
                         AsanHostModule::builder()
                             .env(&env)
                             .filter(asan_filter)
@@ -207,6 +208,7 @@ impl Client<'_> {
                     args,
                     tuple_list!(
                         CmpLogModule::default(),
+                        CmpLogRoutinesModule::new(StdAddressFilter::default()),
                         AsanHostModule::builder()
                             .env(&env)
                             .filter(asan_filter)
@@ -221,6 +223,7 @@ impl Client<'_> {
                     args,
                     tuple_list!(
                         CmpLogModule::default(),
+                        CmpLogRoutinesModule::new(StdAddressFilter::default()),
                         AsanGuestModule::new(&env, asan_filter),
                         injection_module
                     ),
@@ -231,6 +234,7 @@ impl Client<'_> {
                     args,
                     tuple_list!(
                         CmpLogModule::default(),
+                        CmpLogRoutinesModule::new(StdAddressFilter::default()),
                         AsanGuestModule::new(&env, asan_filter),
                     ),
                     state,
@@ -269,13 +273,13 @@ impl Client<'_> {
             if let Some(injection_module) = injection_module {
                 instance_builder.build().run(
                     args,
-                    tuple_list!(CmpLogModule::default(), injection_module),
+                    tuple_list!(CmpLogModule::default(), CmpLogRoutinesModule::new(StdAddressFilter::default()), injection_module),
                     state,
                 )
             } else {
                 instance_builder
                     .build()
-                    .run(args, tuple_list!(CmpLogModule::default()), state)
+                    .run(args, tuple_list!(CmpLogModule::default(), CmpLogRoutinesModule::new(StdAddressFilter::default())), state)
             }
         } else if let Some(injection_module) = injection_module {
             instance_builder
