@@ -60,21 +60,56 @@ pub fn set_current_stream(b: &[u8]) {
 
 pub fn consume_bytes(syscall: i32, size: usize) -> Vec<u8> {
     CURRENT_BUCKETS.with(|b| {
+        // let mut b = b.borrow_mut();
+        // let bucket = b.buckets.get_mut(&syscall).expect("cant find syscallllll");
+
+        // let start_pos = bucket.position;
+        // let end_pos = start_pos + size;
+        // let end_safe = end_pos.min(bucket.bytes.len());
+
+        // if end_pos >= BUCKET_SIZE {
+        //     let mut temp_vec = bucket.bytes[start_pos..BUCKET_SIZE].to_vec();
+        //     temp_vec.extend_from_slice(&bucket.bytes[0..end_pos - BUCKET_SIZE]);
+        //     bucket.position = end_pos - BUCKET_SIZE;
+        //     return temp_vec;
+        // }
+
+        // bucket.position = end_safe;
+        // return bucket.bytes[start_pos..end_safe].to_vec();
         let mut b = b.borrow_mut();
         let bucket = b.buckets.get_mut(&syscall).expect("cant find syscallllll");
 
-        let start_pos = bucket.position;
-        let end_pos = start_pos + size;
-        let end_safe = end_pos.min(bucket.bytes.len());
-
-        if end_pos >= BUCKET_SIZE {
-            let mut temp_vec = bucket.bytes[start_pos..BUCKET_SIZE].to_vec();
-            temp_vec.extend_from_slice(&bucket.bytes[0..end_pos - BUCKET_SIZE]);
-            bucket.position = end_pos - BUCKET_SIZE;
-            return temp_vec;
+        if size == 0 {
+            return Vec::new();
         }
 
-        bucket.position = end_safe;
-        return bucket.bytes[start_pos..end_safe].to_vec();
+        let len = bucket.bytes.len();
+        let start_pos = bucket.position % len;
+        let end_pos = start_pos + size;
+
+        if end_pos <= len {
+            bucket.position = end_pos % len;
+            return bucket.bytes[start_pos..end_pos].to_vec();
+        }
+
+        let mut temp_vec = Vec::with_capacity(size);
+
+        // first tail chunk
+        temp_vec.extend_from_slice(&bucket.bytes[start_pos..len]);
+
+        // middle full wraps
+        let mut remaining = size - (len - start_pos);
+        while remaining >= len {
+            temp_vec.extend_from_slice(&bucket.bytes[..]);
+            remaining -= len;
+        }
+
+        // final head chunk
+        if remaining > 0 {
+            temp_vec.extend_from_slice(&bucket.bytes[0..remaining]);
+        }
+
+        bucket.position = (start_pos + size) % len;
+        temp_vec
     })
 }

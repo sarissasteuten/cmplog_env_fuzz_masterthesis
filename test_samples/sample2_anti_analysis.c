@@ -49,19 +49,19 @@ int main() {
 		return 0;
 
 	// wont get thourgh this yet probs
-	if (!strstr(uts.sysname, "Linux"))
-		return 0;
+	// if (!strstr(uts.sysname, "Linux"))
+	// 	return 0;
 
-	if (!strstr(uts.machine, "x86_64"))
-		return 0;
+	// if (!strstr(uts.machine, "x86_64"))
+	// 	return 0;
 
-	if (strstr(uts.release, "azure"))
-		return 0;
+	// if (strstr(uts.release, "azure"))
+	// 	return 0;
 
-	if (strstr(uts.release, "aws"))
-		return 0;
+	// if (strstr(uts.release, "aws"))
+	// 	return 0;
 		
-	printf("-- STAGE 1 UNAME_PROFILE\n");
+	// printf("-- STAGE 1 UNAME_PROFILE\n");
 
 	struct sysinfo info;
 

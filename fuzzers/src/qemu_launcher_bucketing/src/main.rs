@@ -2,7 +2,9 @@
 mod hooks_harness;
 mod stream;
 mod class_path;
+mod metrics;
 mod syscalls;
+// mod snapshot;
 #[cfg(target_os = "linux")]
 mod client;
 #[cfg(target_os = "linux")]
@@ -21,7 +23,16 @@ use crate::fuzzer::Fuzzer;
 
 #[cfg(target_os = "linux")]
 pub fn main() {
+    // ctrlc::set_handler(move || {
+    //     metrics::print_results();
+    //     std::process::exit(0);
+    // }).expect("Error setting Ctrl+C handler");
+
     Fuzzer::new().fuzz().unwrap();
+    //  if let Err(e) = Fuzzer::new().fuzz() {
+    //     eprintln!("fuzz() returned error: {e:?}");
+    //     return;
+    // }
 }
 
 #[cfg(not(target_os = "linux"))]

@@ -110,7 +110,7 @@ impl Client<'_> {
             Vec::new()
         };
 
-        stream::set_seed("/home/sarissa/Desktop/thesis-sarissa/fuzzers/corpus/seed");
+        // stream::set_seed("/home/sarissa/Desktop/thesis-sarissa/fuzzers/corpus/seed");
 
         let instance_builder = Instance::builder()
             .options(self.options)

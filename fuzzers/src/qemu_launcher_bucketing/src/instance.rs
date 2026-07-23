@@ -1,8 +1,11 @@
 use crate::hooks_harness;
 use crate::stream;
+use crate::metrics;
+// use crate::snapshot;
 use core::fmt::Debug;
 use std::{fs, ops::Range, process};
 use libafl::inputs::HasTargetBytes;
+use std::sync::atomic::Ordering;
 
 use libafl::{
     corpus::{Corpus, HasCurrentCorpusId, InMemoryOnDiskCorpus, OnDiskCorpus},
@@ -122,6 +125,7 @@ where
                 .get_section(".text", qemu.load_addr())
                 .ok_or_else(|| Error::key_not_found("Failed to find .text section"))?;
             Ok(StdAddressFilter::allow_list(vec![range]))
+            // Ok(StdAddressFilter::default())
         }
     }
 
@@ -174,12 +178,45 @@ where
             .qemu_parameters(args)
             .modules(modules)
             .build()?;
-        let harness = Harness::init(emulator.qemu()).expect("Error setting up harness.");
-        let qemu = emulator.qemu();
-        hooks_harness::init_hooks(&qemu); // hooks init toegevoegd
-        // stream::set_seed("/home/sarissa/Desktop/thesis-sarissa/fuzzers/corpus/seed");
-         // STREAM NOG ZETTEN!!
 
+        let qemu = emulator.qemu();
+        let mut elf_buffer = Vec::new();
+        let elf = EasyElf::from_file(qemu.binary_path(), &mut elf_buffer)?;
+        let is_static = elf.get_section(".interp", qemu.load_addr()).is_none();
+
+        // metrics::init_log_files();     
+        if is_static{
+            // eprintln!("isstatic");
+            
+            let entry = if let Some(main_addr) = elf.resolve_symbol("main", qemu.load_addr()) {
+                main_addr
+            } else {
+                let entry_point = elf.entry_point(qemu.load_addr()).expect("no entry point");
+                if let Some(main_addr) = Harness::find_main_from_start(qemu, entry_point) {
+                    eprintln!("found main dynamically: {:#x}", main_addr);
+                    main_addr
+                }else if let Some(range) = elf.get_section(".text", qemu.load_addr()) {
+                    eprintln!("falling back to .text start: {:#x}", range.start);
+                    range.start
+                }else{
+                    entry_point
+                }
+            };
+            // eprintln!("HARNESS_ENTRY set to {:#x}", entry);
+            hooks_harness::HARNESS_ENTRY.store(entry as u64, Ordering::Relaxed);
+            hooks_harness::init_hooks(&qemu); // hooks init toegevoegd
+            stream::set_current_stream(&vec![0u8; stream::STREAM_SIZE]);
+        }
+
+        metrics::init_results_file();
+        metrics::init_log_files(self.client_description.core_id().0.try_into().unwrap());     
+        let harness = Harness::init(emulator.qemu()).expect("Error setting up harness.");
+        
+        if !is_static{
+            hooks_harness::init_hooks(&qemu);
+            stream::set_current_stream(&vec![0u8; stream::STREAM_SIZE]);
+        }
+  
         // update address filter after qemu has been initialized
         emulator.modules_mut()
             .modules_mut()
@@ -268,14 +305,31 @@ where
         state.add_metadata(tokens);
 
         harness.post_fork();
-
-        let mut harness = |_emulator: &mut Emulator<_, _, _, _, _, _, _>,
-                           _state: &mut _,
-                           input: &BytesInput| {
+        
+        let mut harness = |emulator: &mut Emulator<_, _, _, _, _, _, _>,
+                        //    _state: &mut _,
+                            state: &mut ClientState,
+                            input: &BytesInput| {
                             stream::set_current_stream(&input.target_bytes());
                             harness.run(input);
+                            // let edges = unsafe{MAX_EDGES_FOUND};
+                            // metrics::log_coverage_if_due(edges as u64);
+                            // metrics::log_throughput_if_due(*state.executions() as u64);
                             ExitKind::Ok
                            };
+
+        // let mut harness = |emulator: &mut Emulator<_, _, _, _, _, _, _>,
+        //            _state: &mut ClientState,
+        //            input: &BytesInput| {
+        //     stream::set_current_stream(&input.target_bytes());
+
+        //     let exit = harness.run(input);
+
+        //     Self::take_snapshot_if_triggered(emulator);
+
+        //     exit
+        //     // ExitKind::Ok
+        // };
 
         // A fuzzer with feedbacks and a corpus scheduler
         let mut fuzzer = StdFuzzer::new(scheduler, feedback, objective);
@@ -364,7 +418,6 @@ where
                 &mut self.mgr,
                 self.options.timeout,
             )?;
-
             // Setup an havoc mutator with a mutational stage
             let mutator = HavocScheduledMutator::new(havoc_mutations().merge(tokens_mutations()));
             let power: StdPowerMutationalStage<_, _, BytesInput, _, _, _> =
@@ -409,6 +462,9 @@ where
         OT: ObserversTuple<I, S>,
         S: HasCorpus<I> + HasCurrentCorpusId + HasSolutions<I> + HasExecutions + Unpin,
     {
+        // if !snapshot::is_taken() {
+        //         return;
+        //     }
         if let Some(m) = executor
             .inner_mut()
             .exposed_executor_state_mut()
@@ -442,6 +498,10 @@ where
         S: HasCorpus<I> + HasCurrentCorpusId + HasSolutions<I> + HasExecutions + Unpin,
         SOT: ObserversTuple<I, S>,
     {
+        //  if !snapshot::is_taken() {
+        //         return;
+        //     }
+
         if let Some(m) = executor
             .executor_mut()
             .inner_mut()
@@ -503,6 +563,7 @@ where
             fuzzer.fuzz_loop(stages, executor, state, &mut self.mgr)?;
         }
 
+        // metrics::print_results(); 
         Ok(())
     }
 }
