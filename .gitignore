@@ -5,3 +5,4 @@ target/
 **/crashes/
 **/output/target/
 *.log
+results_cmplog_dynamic/
