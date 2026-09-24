@@ -3,4 +3,5 @@ target/
 
 
 **/crashes/
-**/output/
+**/output/target/
+*.log
