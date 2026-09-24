@@ -24,9 +24,11 @@ pub static PRINTING: AtomicBool = AtomicBool::new(false);
 thread_local! {
     pub static FAKED_FD_MAPPING: RefCell<HashMap<i32,i32>> = RefCell::new(HashMap::new());
     pub static SYSCALL_COUNT: RefCell<HashMap<(u64,u64),u32>> = RefCell::new(HashMap::new());
+    pub static REAL_SOCKETS: RefCell<Vec<i32>> = RefCell::new(Vec::new()); 
 
 }
 
+pub static SNAPSHOT_TAKEN: AtomicBool = AtomicBool::new(false);
 pub static HARNESS_PC: AtomicU64 = AtomicU64::new(0);
 pub static HARNESS_SP: AtomicU64 = AtomicU64::new(0);
 pub static HARNESS_ARGV: AtomicU64 = AtomicU64::new(0);
@@ -44,12 +46,15 @@ fn classify_path(qemu: &Qemu, addr: GuestAddr, num: i32) -> class_path::PathRule
     let mut buf = vec![0u8; 256];
     qemu.read_mem(addr, &mut buf).unwrap();
     let nul_pos = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
-    let path = std::str::from_utf8(&buf[..nul_pos]).unwrap();
+    let path = std::str::from_utf8(&buf[..nul_pos]).unwrap_or("invalid_utf8");
     metrics::behavior_seen(num as i64, path);
     class_path::class_path(path)
 }
 
 fn fuzzed_size(num: i32, max: GuestAddr) -> u32 {
+    if max == 0 {
+        return 0;
+    }
     let mut fuzzed_size = crate::stream::consume_bytes(num, 4);
     fuzzed_size.resize(4, 0);
     let fuzzed_size = u32::from_le_bytes(fuzzed_size.as_slice().try_into().unwrap());
@@ -57,9 +62,14 @@ fn fuzzed_size(num: i32, max: GuestAddr) -> u32 {
 }
 
 fn write_fuzzed_bytes(qemu: &Qemu, addr: GuestAddr, num: i32, size: usize) {
+    if addr == 0 || size == 0 || addr > 0x7fffffffffff {
+        return;
+    }
+    let size = size.min(65536);
     let mut fuzzed_bytes = crate::stream::consume_bytes(num, size);
     &fuzzed_bytes.resize(size, 0); // this already checks if it is even less then 4
-    qemu.write_mem(addr, &fuzzed_bytes[..size]).unwrap();
+    // eprintln!("[FUZZED] syscall={} size={} bytes={:02x?}", num, size, &fuzzed_bytes[..size.min(32)]);
+    qemu.write_mem(addr, &fuzzed_bytes[..size]).ok();
 }
 
 fn write_ret_32(qemu: &Qemu, num: i32, size: usize) -> i32{
@@ -90,6 +100,7 @@ extern "C" fn pre_hooks(
     // eprintln!("PRE HOOKS {} \n", sys_num);
     metrics::syscall_seen(sys_num as i64, _a0, _a1, _a2, _a3, _a4, _a5, _a6, _a7);
    
+   
     let pc = qemu.read_reg(Regs::Pc).unwrap();
     let key = (sys_num as u64, pc as u64);
     let count = SYSCALL_COUNT.with(|c| {
@@ -99,13 +110,25 @@ extern "C" fn pre_hooks(
         *counter
     });
 
-    if count > 50{
+    if count > 200 {
             // eprintln!("In LOOOOP");
         SYSCALL_COUNT.with(|c: &RefCell<HashMap<(u64, u64), u32>>| {
                 c.borrow_mut().clear();
             });
         FAKED_FD_MAPPING.with(|f: &RefCell<HashMap<i32,i32>>| {
             f.borrow_mut().clear();
+        });
+        REAL_SOCKETS.with(|s| {
+            // unsafe { libc::close(*fd); } } s.borrow_mut().clear(); 
+            let sockets = s.borrow();
+            // eprintln!("[EXIT] closing {} sockets", sockets.len());
+            // eprintln!("[RESET] closing {} sockets hook count 200", sockets.len());
+            for fd in sockets.iter() {
+                let result = unsafe { libc::close(*fd) };
+                // eprintln!("[EXIT] closed fd={} result={}", fd, result);
+            }
+            drop(sockets);
+            s.borrow_mut().clear();
         });
             if let Some(cpu) = qemu.current_cpu() {
                 cpu.trigger_breakpoint(); // immediate stop path
@@ -114,6 +137,12 @@ extern "C" fn pre_hooks(
                 libafl_qemu_sys::libafl_sync_exit_cpu();
             }
             return SyscallHookResult::Skip(0)
+    }
+
+     if !SNAPSHOT_TAKEN.load(Ordering::Relaxed) 
+        && sys_num != syscalls::SYS_EXIT.num 
+        && sys_num != syscalls::SYS_EXIT_GROUP.num {
+        return SyscallHookResult::Run;
     }
   
     match sys_num {
@@ -135,7 +164,21 @@ extern "C" fn pre_hooks(
             FAKED_FD_MAPPING.with(|f: &RefCell<HashMap<i32,i32>>| {
                 f.borrow_mut().clear();
             });
-            
+            REAL_SOCKETS.with(|s| { 
+                // unsafe { libc::close(*fd); } } s.borrow_mut().clear(); 
+                let sockets = s.borrow();
+                // eprintln!("[EXIT] closing {} sockets", sockets.len());
+            // eprintln!("[RESET] closing {} sockets in exit", sockets.len());
+                for fd in sockets.iter() {
+                    let result = unsafe { libc::close(*fd) };
+                    // eprintln!("[EXIT] closed fd={} result={}", fd, result);
+                }
+                drop(sockets);
+                s.borrow_mut().clear();
+            });
+            // return SyscallHookResult::Run;
+
+          
             if !ready {
                 if entry != 0 {
                     let sp = qemu.read_reg(Regs::Sp).unwrap() as GuestAddr;
@@ -153,6 +196,7 @@ extern "C" fn pre_hooks(
                 }
                 return SyscallHookResult::Run;
             }
+            // SNAPSHOT_TAKEN.store(true, Ordering::Relaxed);
             
             let pc = HARNESS_PC.load(Ordering::Relaxed) as GuestAddr;
             let sp = HARNESS_SP.load(Ordering::Relaxed) as GuestAddr;
@@ -170,6 +214,9 @@ extern "C" fn pre_hooks(
         }
 
         n if n == syscalls::SYS_UNAME.num => {
+            // if !SNAPSHOT_TAKEN.load(Ordering::Relaxed) {
+            //     return SyscallHookResult::Run; // laat libc init draaien
+            // }
             let pc = qemu.read_reg(Regs::Pc).unwrap();
 
             write_fuzzed_bytes(
@@ -250,6 +297,10 @@ extern "C" fn pre_hooks(
             SyscallHookResult::Skip(0)
         }
 
+        n if n == syscalls::SYS_TGKILL.num || n == syscalls::SYS_KILL.num || n == syscalls::SYS_TKILL.num => {
+            SyscallHookResult::Skip(0)
+        }
+
         n if n == syscalls::SYS_NANOSLEEP.num => {
             // PRINTING.swap(true, Ordering::Relaxed);
             write_fuzzed_bytes(
@@ -259,7 +310,7 @@ extern "C" fn pre_hooks(
                 syscalls::SYS_NANOSLEEP.consume_size,
             );
             let ret = write_ret_32(&qemu, syscalls::SYS_NANOSLEEP.num, 4);
-            SyscallHookResult::Skip(ret as GuestAddr)
+            SyscallHookResult::Skip(ret as i64 as GuestAddr)
             // SyscallHookResult::Skip(0)
         }
 
@@ -299,9 +350,10 @@ extern "C" fn pre_hooks(
             let mut buf = vec![0u8; 256];
             qemu.read_mem(_a0, &mut buf).unwrap();
             let nul_pos = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
-            let path = std::str::from_utf8(&buf[..nul_pos]).unwrap();
+            let path = std::str::from_utf8(&buf[..nul_pos]).unwrap_or("invalid_utf8");
             metrics::behavior_seen(n as i64, path);
-            SyscallHookResult::Skip(-2i64 as GuestAddr) // returns ENOENT, so seems like the doesnt exist so it cant just start a new process that is not followed by the fuzzer. 
+            // SyscallHookResult::Skip(-2i64 as GuestAddr) // returns ENOENT, so seems like the doesnt exist so it cant just start a new process that is not followed by the fuzzer. 
+            SyscallHookResult::Skip(0) 
         }
 
         n if n == syscalls::SYS_CHMOD.num => {
@@ -309,7 +361,7 @@ extern "C" fn pre_hooks(
             let mut buf = vec![0u8; 256];
             qemu.read_mem(_a0, &mut buf).unwrap();
             let nul_pos = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
-            let path = std::str::from_utf8(&buf[..nul_pos]).unwrap();
+            let path = std::str::from_utf8(&buf[..nul_pos]).unwrap_or("invalid_utf8");
             metrics::behavior_seen(n as i64, &format!("{},mode =  {:o}", path, _a1));
             SyscallHookResult::Skip(0) // faking success so it doesnt actually modify the file system
         }
@@ -319,7 +371,7 @@ extern "C" fn pre_hooks(
             let mut buf = vec![0u8; 256];
             qemu.read_mem(_a0, &mut buf).unwrap();
             let nul_pos = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
-            let path = std::str::from_utf8(&buf[..nul_pos]).unwrap();
+            let path = std::str::from_utf8(&buf[..nul_pos]).unwrap_or("invalid_utf8");
             metrics::behavior_seen(n as i64, path);
             SyscallHookResult::Skip(0) // faking success so it doesnt actually modify the file system
         }
@@ -329,44 +381,44 @@ extern "C" fn pre_hooks(
             let mut buf = vec![0u8; 256];
             qemu.read_mem(_a1, &mut buf).unwrap();
             let nul_pos = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
-            let path = std::str::from_utf8(&buf[..nul_pos]).unwrap();
+            let path = std::str::from_utf8(&buf[..nul_pos]).unwrap_or("invalid_utf8");
             metrics::behavior_seen(n as i64, path);
             SyscallHookResult::Skip(0) // faking success so it doesnt actually modify the file system
         }
 
         n if n == syscalls::SYS_ACCESS.num || n == syscalls::SYS_FACCESSAT.num || n == syscalls::SYS_FACCESSAT2.num => {
             let ret = write_ret_32(&qemu, n, syscalls::SYS_ACCESS.consume_size);
-            SyscallHookResult::Skip(ret as GuestAddr)
+            SyscallHookResult::Skip(ret as i64 as GuestAddr)
         }
 
         n if n == syscalls::SYS_GETPID.num => {
             let ret = write_ret_32(&qemu, syscalls::SYS_GETPID.num, syscalls::SYS_GETPID.consume_size);
-            SyscallHookResult::Skip(ret as GuestAddr)
+            SyscallHookResult::Skip(ret as i64 as GuestAddr)
         }
 
         n if n == syscalls::SYS_GETPPID.num => {
             let ret = write_ret_32(&qemu, syscalls::SYS_GETPPID.num, syscalls::SYS_GETPPID.consume_size);
-            SyscallHookResult::Skip(ret as GuestAddr)
+            SyscallHookResult::Skip(ret as i64 as GuestAddr)
         }
 
         n if n == syscalls::SYS_GETUID.num => {
             let ret = write_ret_32(&qemu, syscalls::SYS_GETUID.num, syscalls::SYS_GETUID.consume_size);
-            SyscallHookResult::Skip(ret as GuestAddr)
+            SyscallHookResult::Skip(ret as i64 as GuestAddr)
         }
 
         n if n == syscalls::SYS_GETEUID.num => {
             let ret = write_ret_32(&qemu, syscalls::SYS_GETEUID.num, syscalls::SYS_GETEUID.consume_size);
-            SyscallHookResult::Skip(ret as GuestAddr)
+            SyscallHookResult::Skip(ret as i64 as GuestAddr)
         }
 
         n if n == syscalls::SYS_GETGID.num => {
             let ret = write_ret_32(&qemu, syscalls::SYS_GETGID.num, syscalls::SYS_GETGID.consume_size);
-            SyscallHookResult::Skip(ret as GuestAddr)
+            SyscallHookResult::Skip(ret as i64 as GuestAddr)
         }
 
         n if n == syscalls::SYS_GETEGID.num => {
             let ret = write_ret_32(&qemu, syscalls::SYS_GETEGID.num, syscalls::SYS_GETEGID.consume_size);
-            SyscallHookResult::Skip(ret as GuestAddr)
+            SyscallHookResult::Skip(ret as i64 as GuestAddr)
         }
 
         n if n == syscalls::SYS_PTRACE.num => {
@@ -408,13 +460,16 @@ extern "C" fn pre_hooks(
             }
             let ret = write_ret_32(&qemu, syscalls::SYS_IOCTL.num, syscalls::SYS_IOCTL.consume_size);
             // eprintln!("HOOK IOCTL");
-            SyscallHookResult::Skip(ret as GuestAddr)
+            SyscallHookResult::Skip(ret as i64 as GuestAddr)
         }
 
-        n if n == syscalls::SYS_SOCKET.num => {
-            let ret = write_ret_32(&qemu, syscalls::SYS_SOCKET.num, syscalls::SYS_SOCKET.consume_size);
-            SyscallHookResult::Skip(ret as GuestAddr)
-        }
+        // n if n == syscalls::SYS_SOCKET.num => {
+        //     // let mut fuzzed_fd = (write_ret_32(&qemu, n, 4).wrapping_abs() % 900) + 100;
+        //     // SyscallHookResult::Skip(fuzzed_fd as GuestAddr)
+        //     // let ret = write_ret_32(&qemu, syscalls::SYS_SOCKET.num, syscalls::SYS_SOCKET.consume_size);
+        //     // SyscallHookResult::Skip(ret as GuestAddr)
+        //     SyscallHookResult::Run
+        // }
 
         n if n == syscalls::SYS_CONNECT.num || n == syscalls::SYS_BIND.num => {
             let mut buf = vec![0u8;16];
@@ -424,7 +479,7 @@ extern "C" fn pre_hooks(
             };
             metrics::behavior_seen(n as i64, &arguments);
             let ret = write_ret_32(&qemu, n, syscalls::SYS_CONNECT.consume_size);
-            SyscallHookResult::Skip(ret as GuestAddr)
+            SyscallHookResult::Skip(ret as i64 as GuestAddr)
         }
 
         n if n == syscalls::SYS_SENDTO.num => {
@@ -434,13 +489,13 @@ extern "C" fn pre_hooks(
                 "unknown".to_string()
             };
             metrics::behavior_seen(n as i64, &arguments);
-            let ret = write_ret_32(&qemu, n, syscalls::SYS_CONNECT.consume_size);
-            SyscallHookResult::Skip(ret as GuestAddr)
+            let ret = write_ret_32(&qemu, n, syscalls::SYS_SENDTO.consume_size);
+            SyscallHookResult::Skip(ret as i64 as GuestAddr)
         }
 
         n if n == syscalls::SYS_LISTEN.num => {
             let ret = write_ret_32(&qemu, n, syscalls::SYS_LISTEN.consume_size);
-            SyscallHookResult::Skip(ret as GuestAddr)
+            SyscallHookResult::Skip(ret as i64 as GuestAddr)
         }
 
         n if n == syscalls::SYS_RECVFROM.num => {
@@ -448,6 +503,15 @@ extern "C" fn pre_hooks(
             // let ret = write_ret_32(&qemu, syscalls::SYS_GETRANDOM.num, syscalls::SYS_GETRANDOM.consume_size);
             write_fuzzed_bytes(&qemu, _a1, syscalls::SYS_RECVFROM.num, size as usize);
             SyscallHookResult::Skip(size as GuestAddr)
+        }
+        
+        n if n == syscalls::SYS_ACCEPT.num || n == syscalls::SYS_ACCEPT4.num => {
+            let mut fuzzed_fd  = write_ret_32(&qemu, n, syscalls::SYS_ACCEPT.consume_size);
+            if fuzzed_fd >= 0 && fuzzed_fd <= 10 {
+                fuzzed_fd = fuzzed_fd.wrapping_abs() + 0x100000;
+            }
+            // eprintln!("[ACCEPT] hook fired, returning fd={}", fuzzed_fd);
+            SyscallHookResult::Skip(fuzzed_fd as i64 as GuestAddr)
         }
 
         n if n == syscalls::SYS_GETRANDOM.num => {
@@ -600,10 +664,19 @@ extern "C" fn pre_hooks(
             SyscallHookResult::Skip(0)
         }
 
-        n if n == syscalls::SYS_FORK.num || n == syscalls::SYS_VFORK.num || n == syscalls::SYS_CLONE.num || n == syscalls::SYS_CLONE3.num => {
+        n if n == syscalls::SYS_FORK.num || n == syscalls::SYS_VFORK.num || n == syscalls::SYS_CLONE.num || n == syscalls::SYS_CLONE3.num || n == syscalls::SYS_SELECT.num || n == syscalls::SYS_PSELECT6.num => {
             // PRINTING.swap(true, Ordering::Relaxed);
             SyscallHookResult::Skip(0) // child gets 0
             // SyscallHookResult::Skip(1337) // child gets 0
+        }
+
+        n if n == syscalls::SYS_SETSID.num || n == syscalls::SYS_CHDIR.num || n == syscalls::SYS_CHROOT.num => {
+            // println!("SETSID\n");
+            SyscallHookResult::Skip(0) // fake success
+        }
+
+        n if n == syscalls::SYS_SETRLIMIT.num => {
+            SyscallHookResult::Skip(0) // fake success, don't change fuzzer's limits
         }
 
         n if n == syscalls::SYS_MMAP.num => {
@@ -640,6 +713,7 @@ extern "C" fn post_hooks(
     let qemu = unsafe { libafl_qemu::Qemu::get_unchecked() };
     // let env = crate::env_vector::get_current();
 
+    // return SyscallHookResult::Run;
     match sys_num {
         n if n == syscalls::SYS_OPENAT.num || n == syscalls::SYS_OPENAT2.num => {
             //classify path
@@ -694,6 +768,13 @@ extern "C" fn post_hooks(
 
             ret as GuestAddr
         }
+
+        n if n == syscalls::SYS_SOCKET.num => { 
+            REAL_SOCKETS.with(|s| s.borrow_mut().push(ret as i32)); 
+            // eprintln!("[POST SOCKET] fd={}", ret as i32);
+            ret  as GuestAddr
+        }
+
 
         n if n == syscalls::SYS_READ.num || n == syscalls::SYS_PREAD64.num => {
             let real_nbytes = (ret as usize).min(stream::BUCKET_SIZE);

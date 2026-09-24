@@ -3,7 +3,7 @@ use crate::syscalls;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-pub const BUCKET_SIZE: usize = 4096;
+pub const BUCKET_SIZE: usize = 1000;
 pub const N_BUCKETS: usize = syscalls::N_SYSCALLS;
 pub const STREAM_SIZE: usize = BUCKET_SIZE * N_BUCKETS;
 
@@ -22,6 +22,8 @@ pub fn set_seed(path: &str) {
 
     for byte in buf.iter_mut() {
         *byte = rand::random::<u8>();
+        // *byte = 0x41;
+
     }
     std::fs::write(path, buf).expect("cannot writeeee seed\n");
 }
@@ -60,22 +62,7 @@ pub fn set_current_stream(b: &[u8]) {
 
 pub fn consume_bytes(syscall: i32, size: usize) -> Vec<u8> {
     CURRENT_BUCKETS.with(|b| {
-        // let mut b = b.borrow_mut();
-        // let bucket = b.buckets.get_mut(&syscall).expect("cant find syscallllll");
-
-        // let start_pos = bucket.position;
-        // let end_pos = start_pos + size;
-        // let end_safe = end_pos.min(bucket.bytes.len());
-
-        // if end_pos >= BUCKET_SIZE {
-        //     let mut temp_vec = bucket.bytes[start_pos..BUCKET_SIZE].to_vec();
-        //     temp_vec.extend_from_slice(&bucket.bytes[0..end_pos - BUCKET_SIZE]);
-        //     bucket.position = end_pos - BUCKET_SIZE;
-        //     return temp_vec;
-        // }
-
-        // bucket.position = end_safe;
-        // return bucket.bytes[start_pos..end_safe].to_vec();
+        
         let mut b = b.borrow_mut();
         let bucket = b.buckets.get_mut(&syscall).expect("cant find syscallllll");
 

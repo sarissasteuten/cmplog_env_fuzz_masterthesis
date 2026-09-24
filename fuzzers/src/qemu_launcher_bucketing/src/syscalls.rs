@@ -235,6 +235,16 @@ pub const SYS_BIND: syscall_data = syscall_data {
     consume_size: 4, // not needed
 };
 
+pub const SYS_ACCEPT: syscall_data = syscall_data {
+    num: 43,
+    consume_size: 4, // not needed
+};
+
+pub const SYS_ACCEPT4: syscall_data = syscall_data {
+    num: 288,
+    consume_size: 4, // not needed
+};
+
 pub const SYS_LISTEN: syscall_data = syscall_data {
     num: 50,
     consume_size: 4, // not needed
@@ -309,8 +319,50 @@ pub const SYS_EXECVEAT: syscall_data = syscall_data { // so it cant start other 
     num: 322,
     consume_size: 4,
 };
+pub const SYS_SETSID: syscall_data = syscall_data {
+    num: 112,
+    consume_size: 4,
+};
+pub const SYS_CHROOT: syscall_data = syscall_data {
+    num: 161,
+    consume_size: 4,
+};
+pub const SYS_CHDIR: syscall_data = syscall_data {
+    num: 80,
+    consume_size: 4,
+};
 
-pub const N_SYSCALLS: usize = 58;
+pub const SYS_SETRLIMIT: syscall_data = syscall_data {
+    num: 160,
+    consume_size: 4,
+};
+
+pub const SYS_KILL: syscall_data = syscall_data {
+    num: 62,
+    consume_size: 4,
+};
+
+pub const SYS_TKILL: syscall_data = syscall_data {
+    num: 200,
+    consume_size: 4,
+};
+
+pub const SYS_TGKILL: syscall_data = syscall_data {
+    num: 130,
+    consume_size: 4,
+};
+
+pub const SYS_SELECT: syscall_data = syscall_data {
+    num: 23,
+    consume_size: 0,
+};
+
+pub const SYS_PSELECT6: syscall_data = syscall_data {
+    num: 270,
+    consume_size: 0,
+};
+
+pub const N_SYSCALLS: usize = 69;
 
 pub const SYSCALLS: [syscall_data; N_SYSCALLS] = [
     SYS_ACCESS,
@@ -371,4 +423,15 @@ pub const SYSCALLS: [syscall_data; N_SYSCALLS] = [
     SYS_FACCESSAT,
     SYS_FACCESSAT2,
     SYS_WAIT4,
+    SYS_ACCEPT,
+    SYS_ACCEPT4,
+    SYS_SETSID,
+    SYS_CHROOT,
+    SYS_CHDIR,
+    SYS_SETRLIMIT,
+    SYS_KILL,
+    SYS_TKILL,
+    SYS_TGKILL,
+    SYS_SELECT,
+    SYS_PSELECT6
 ];

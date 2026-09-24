@@ -3,7 +3,8 @@ use crate::hooks_harness;
 use crate::stream;
 
 use libafl::{
-    corpus::{InMemoryOnDiskCorpus, OnDiskCorpus},
+    // corpus::{InMemoryOnDiskCorpus, OnDiskCorpus},
+    corpus::{InMemoryCorpus, OnDiskCorpus},
     events::{
         ClientDescription, EventFirer, EventReceiver, EventRestarter, ProgressReporter, SendExiting,
     },
@@ -19,8 +20,12 @@ use libafl_qemu::modules::{
 
 use crate::{harness::Harness, instance::Instance, options::FuzzerOptions};
 
+// pub type ClientState =
+//     StdState<InMemoryOnDiskCorpus<BytesInput>, BytesInput, StdRand, OnDiskCorpus<BytesInput>>;
+
 pub type ClientState =
-    StdState<InMemoryOnDiskCorpus<BytesInput>, BytesInput, StdRand, OnDiskCorpus<BytesInput>>;
+    StdState<InMemoryCorpus<BytesInput>, BytesInput, StdRand, OnDiskCorpus<BytesInput>>;
+
 
 pub struct Client<'a> {
     options: &'a FuzzerOptions,

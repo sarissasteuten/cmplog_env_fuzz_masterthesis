@@ -8,7 +8,8 @@ use libafl::inputs::HasTargetBytes;
 use std::sync::atomic::Ordering;
 
 use libafl::{
-    corpus::{Corpus, HasCurrentCorpusId, InMemoryOnDiskCorpus, OnDiskCorpus},
+    // corpus::{Corpus, HasCurrentCorpusId, InMemoryOnDiskCorpus, OnDiskCorpus, SchedulerTestcaseMetadata},
+    corpus::{Corpus, HasCurrentCorpusId, InMemoryCorpus, OnDiskCorpus, SchedulerTestcaseMetadata},
     events::{
         ClientDescription, EventFirer, EventReceiver, EventRestarter, ProgressReporter, SendExiting,
     },
@@ -55,8 +56,11 @@ use typed_builder::TypedBuilder;
 
 use crate::{harness::Harness, options::FuzzerOptions};
 
+// pub type ClientState =
+//     StdState<InMemoryOnDiskCorpus<BytesInput>, BytesInput, StdRand, OnDiskCorpus<BytesInput>>;
+
 pub type ClientState =
-    StdState<InMemoryOnDiskCorpus<BytesInput>, BytesInput, StdRand, OnDiskCorpus<BytesInput>>;
+    StdState<InMemoryCorpus<BytesInput>, BytesInput, StdRand, OnDiskCorpus<BytesInput>>;
 
 /*
  * The snapshot and iterations options interact as follows:
@@ -121,11 +125,34 @@ where
         } else {
             let mut elf_buffer = Vec::new();
             let elf = EasyElf::from_file(qemu.binary_path(), &mut elf_buffer)?;
-            let range = elf
-                .get_section(".text", qemu.load_addr())
-                .ok_or_else(|| Error::key_not_found("Failed to find .text section"))?;
-            Ok(StdAddressFilter::allow_list(vec![range]))
-            // Ok(StdAddressFilter::default())
+            // let range = elf
+            //     .get_section(".text", qemu.load_addr())
+            //     .ok_or_else(|| Error::key_not_found("Failed to find .text section"))?;
+            // Ok(StdAddressFilter::allow_list(vec![range]))
+            let is_dynamic = elf.get_section(".interp", qemu.load_addr()).is_some();
+    
+            // if is_dynamic {
+            //     // // eprintln!("Dynamic binary, instrumenting everything");
+            //     // // Ok(StdAddressFilter::deny_list(vec![]))
+            //     //  let binary_path = qemu.binary_path();
+            //     // let mut ranges = vec![];
+                
+            //     // // Add all mapped memory regions that belong to the target
+            //     // for mapping in qemu.mappings() {
+            //     //     if mapping.path().map_or(false, |p| !p.contains("qemu") && !p.contains("libafl")) {
+            //     //         ranges.push(mapping.start()..mapping.end());
+            //     //     }
+            //     // }
+            //     // Ok(StdAddressFilter::allow_list(ranges))
+            //     Ok(StdAddressFilter::default())
+            // }else 
+            // if let Some(range) = elf.get_section(".text", qemu.load_addr()) {
+            //     Ok(StdAddressFilter::allow_list(vec![range]))
+            // } else {
+            //     eprintln!("No .text section found, instrumenting everything");
+            //     Ok(StdAddressFilter::deny_list(vec![]))
+            // }
+            Ok(StdAddressFilter::default())
         }
     }
 
@@ -189,16 +216,20 @@ where
             // eprintln!("isstatic");
             
             let entry = if let Some(main_addr) = elf.resolve_symbol("main", qemu.load_addr()) {
+                eprintln!("SNAPSHOT = - main_symbol");
                 main_addr
             } else {
                 let entry_point = elf.entry_point(qemu.load_addr()).expect("no entry point");
                 if let Some(main_addr) = Harness::find_main_from_start(qemu, entry_point) {
                     eprintln!("found main dynamically: {:#x}", main_addr);
+                    eprintln!("SNAPSHOT = - dynamic main_symbol");
                     main_addr
                 }else if let Some(range) = elf.get_section(".text", qemu.load_addr()) {
                     eprintln!("falling back to .text start: {:#x}", range.start);
+                    eprintln!("SNAPSHOT = - text");
                     range.start
                 }else{
+                    eprintln!("SNAPSHOT = - entry");
                     entry_point
                 }
             };
@@ -256,7 +287,8 @@ where
 
         // A feedback to choose if an input is a solution or not
         let mut objective = feedback_and_fast!(
-            feedback_or_fast!(CrashFeedback::new(), TimeoutFeedback::new()),
+            // feedback_or_fast!(CrashFeedback::new(), TimeoutFeedback::new()),
+            feedback_or_fast!(CrashFeedback::new()),
             map_objective
         );
 
@@ -268,9 +300,10 @@ where
                     // RNG
                     StdRand::new(),
                     // Corpus that will be evolved, we keep it in memory for performance
-                    InMemoryOnDiskCorpus::no_meta(
-                        self.options.queue_dir(self.client_description.clone()),
-                    )?,
+                    // InMemoryOnDiskCorpus::no_meta(
+                    //     self.options.queue_dir(self.client_description.clone()),
+                    // )?,
+                    InMemoryCorpus::new(),
                     // Corpus in which we store solutions (crashes in this example),
                     // on disk so the user can get them after stopping the fuzzer
                     OnDiskCorpus::new(self.options.crashes_dir(self.client_description.clone()))?,
@@ -533,13 +566,22 @@ where
         if state.must_load_initial_inputs() {
             let corpus_dirs = [self.options.input_dir()];
 
-            state
-                .load_initial_inputs(fuzzer, executor, &mut self.mgr, &corpus_dirs)
-                .unwrap_or_else(|_| {
-                    println!("Failed to load initial corpus at {corpus_dirs:?}");
-                    process::exit(0);
-                });
+            let _ = state.load_initial_inputs_forced(fuzzer, executor, &mut self.mgr, &corpus_dirs);
+                // .unwrap_or_else(|_| {
+                //     println!("Failed to load initial corpus at {corpus_dirs:?}");
+                //     process::exit(0);
+                // });
             println!("We imported {} inputs from disk {corpus_dirs:?}.", state.corpus().count());
+            if state.corpus().count() == 0 {
+                println!("Corpus empty, forcing seed directly");
+                use libafl::corpus::Testcase;
+                let seed_bytes = vec![0u8; stream::STREAM_SIZE];
+                let input = BytesInput::new(seed_bytes);
+                let mut testcase = Testcase::new(input);
+                testcase.add_metadata(SchedulerTestcaseMetadata::new(0));
+                state.corpus_mut().add(testcase)?;
+                println!("Forced seed, corpus now has {} inputs", state.corpus().count());
+            }
         }
 
         /*

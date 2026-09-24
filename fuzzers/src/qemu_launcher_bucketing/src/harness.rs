@@ -44,7 +44,7 @@ impl Harness {
         let vaddr = entry_point - qemu.load_addr();
         let file_offset = if e_type == 2 {
             // eprintln!("non PIE");
-            (vaddr - 0x400000) as usize
+            vaddr.saturating_sub(0x400000) as usize
         } else {
             // eprintln!("PIE");
             vaddr as usize
@@ -142,6 +142,7 @@ impl Harness {
         hooks_harness::HARNESS_ARGC.store(argc as u64, Ordering::Relaxed);
         hooks_harness::HARNESS_ARGV.store(argv as u64, Ordering::Relaxed);
         hooks_harness::HARNESS_READY.store(true, Ordering::Relaxed); 
+        hooks_harness::SNAPSHOT_TAKEN.store(true, Ordering::Relaxed);
        
         Ok(Harness {
             qemu,
@@ -172,6 +173,16 @@ impl Harness {
 
         hooks_harness::FAKED_FD_MAPPING.with(|f: &RefCell<HashMap<i32,i32>>| {
             f.borrow_mut().clear();
+        });
+
+        hooks_harness::REAL_SOCKETS.with(|s| {
+            let sockets = s.borrow();
+            // eprintln!("[RESET] closing {} sockets in reset", sockets.len());
+            for fd in sockets.iter() {
+                unsafe { libc::close(*fd); }
+            }
+            drop(sockets);
+            s.borrow_mut().clear();
         });
 
         let target = input.target_bytes();
