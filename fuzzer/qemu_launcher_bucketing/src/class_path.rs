@@ -11,6 +11,7 @@ pub enum PathRules {
 
 pub fn class_path(path: &str) -> PathRules {
     // eprintln!("classify_path: '{}'", path);
+    
      if path == "/proc/self/exe" {
         if !HARNESS_READY.load(Ordering::Relaxed){
             return PathRules::Exec_runtime
@@ -26,4 +27,3 @@ pub fn class_path(path: &str) -> PathRules {
         PathRules::Unsure
     }
 }
-// path.starts_with("/lib")  || path.starts_with("/usr/lib") || path.ends_with(".so") || path.contains(".so.") 

@@ -6,20 +6,15 @@ use crate::class_path;
 use crate::stream;
 use crate::syscalls;
 use crate::metrics;
-// use crate::snapshot;
-// use libafl_qemu_sys;
+
 use libafl_qemu::{GuestAddr, Qemu, Regs, SyscallHookResult};
 use std::cell::RefCell;
 use std::collections::HashMap;
-// use std::sync::atomic::AtomicBool;
-// use std::sync::atomic::Ordering;
-// use std::sync::atomic::AtomicU64;
 
 use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 use std::ptr;
 use libafl_qemu::modules::SnapshotModule;
 use std::sync::atomic::AtomicU64;
-pub static PRINTING: AtomicBool = AtomicBool::new(false);
 
 thread_local! {
     pub static FAKED_FD_MAPPING: RefCell<HashMap<i32,i32>> = RefCell::new(HashMap::new());
@@ -36,10 +31,6 @@ pub static HARNESS_ARGC: AtomicU64 = AtomicU64::new(0);
 pub static HARNESS_READY: AtomicBool = AtomicBool::new(false);
 pub static HARNESS_ENTRY: AtomicU64 = AtomicU64::new(0);
 pub static HARNESS_FAKE_RET: AtomicU64 = AtomicU64::new(0);
-
-// pub fn set_harness_ret_addr(addr: GuestAddr) {
-//     HARNESS_RET_ADDR.store(addr as u64, Ordering::Relaxed);
-// }
 
 
 fn classify_path(qemu: &Qemu, addr: GuestAddr, num: i32) -> class_path::PathRules {
@@ -68,7 +59,6 @@ fn write_fuzzed_bytes(qemu: &Qemu, addr: GuestAddr, num: i32, size: usize) {
     let size = size.min(65536);
     let mut fuzzed_bytes = crate::stream::consume_bytes(num, size);
     &fuzzed_bytes.resize(size, 0); // this already checks if it is even less then 4
-    // eprintln!("[FUZZED] syscall={} size={} bytes={:02x?}", num, size, &fuzzed_bytes[..size.min(32)]);
     qemu.write_mem(addr, &fuzzed_bytes[..size]).ok();
 }
 
@@ -111,32 +101,31 @@ extern "C" fn pre_hooks(
     });
 
     if count > 200 {
-            // eprintln!("In LOOOOP");
+           
         SYSCALL_COUNT.with(|c: &RefCell<HashMap<(u64, u64), u32>>| {
-                c.borrow_mut().clear();
-            });
+            c.borrow_mut().clear();
+        });
+        
         FAKED_FD_MAPPING.with(|f: &RefCell<HashMap<i32,i32>>| {
             f.borrow_mut().clear();
         });
+
         REAL_SOCKETS.with(|s| {
-            // unsafe { libc::close(*fd); } } s.borrow_mut().clear(); 
+            
             let sockets = s.borrow();
-            // eprintln!("[EXIT] closing {} sockets", sockets.len());
-            // eprintln!("[RESET] closing {} sockets hook count 200", sockets.len());
             for fd in sockets.iter() {
                 let result = unsafe { libc::close(*fd) };
-                // eprintln!("[EXIT] closed fd={} result={}", fd, result);
             }
             drop(sockets);
             s.borrow_mut().clear();
         });
-            if let Some(cpu) = qemu.current_cpu() {
-                cpu.trigger_breakpoint(); // immediate stop path
-            }
-            unsafe {
-                libafl_qemu_sys::libafl_sync_exit_cpu();
-            }
-            return SyscallHookResult::Skip(0)
+        
+        if let Some(cpu) = qemu.current_cpu() {
+            cpu.trigger_breakpoint(); 
+        } unsafe {
+            libafl_qemu_sys::libafl_sync_exit_cpu();
+        }
+        return SyscallHookResult::Skip(0)
     }
 
      if !SNAPSHOT_TAKEN.load(Ordering::Relaxed) 
@@ -154,69 +143,60 @@ extern "C" fn pre_hooks(
             SyscallHookResult::Skip(1337)
         }
         n if n == syscalls::SYS_EXIT.num || n == syscalls::SYS_EXIT_GROUP.num => {
+
             let ready = HARNESS_READY.load(Ordering::Relaxed);
-            // eprintln!("[EXIT HOOK] ready={}", ready);
             let entry = HARNESS_ENTRY.load(Ordering::Relaxed) as GuestAddr;
-            // eprintln!("exit fired, READY={}, entry={:#x}", ready, entry);
+
             SYSCALL_COUNT.with(|c: &RefCell<HashMap<(u64, u64), u32>>| {
                 c.borrow_mut().clear();
             });
+
             FAKED_FD_MAPPING.with(|f: &RefCell<HashMap<i32,i32>>| {
                 f.borrow_mut().clear();
             });
+
             REAL_SOCKETS.with(|s| { 
-                // unsafe { libc::close(*fd); } } s.borrow_mut().clear(); 
                 let sockets = s.borrow();
-                // eprintln!("[EXIT] closing {} sockets", sockets.len());
-            // eprintln!("[RESET] closing {} sockets in exit", sockets.len());
                 for fd in sockets.iter() {
                     let result = unsafe { libc::close(*fd) };
-                    // eprintln!("[EXIT] closed fd={} result={}", fd, result);
                 }
                 drop(sockets);
                 s.borrow_mut().clear();
             });
-            // return SyscallHookResult::Run;
-
           
             if !ready {
                 if entry != 0 {
                     let sp = qemu.read_reg(Regs::Sp).unwrap() as GuestAddr;
-                    let mut new_sp = sp & !0xf; // align
-                    new_sp -= 8;               // room for return address
-                    // let fake_ret: u64 = 0x0;
-                    // let sp = qemu.read_reg(Regs::Sp).unwrap();
+                    //doing aligning of the stack here 
+                    let mut new_sp = sp & !0xf; 
+                    new_sp -= 8;               
                     let fake_ret = HARNESS_FAKE_RET.load(Ordering::Relaxed);
                     qemu.write_mem(new_sp, &fake_ret.to_le_bytes()).unwrap();
-                    qemu.write_reg(Regs::Sp, new_sp).unwrap(); // use new_sp!
+                    qemu.write_reg(Regs::Sp, new_sp).unwrap(); 
                     qemu.write_reg(Regs::Pc, entry).unwrap();
-                    // qemu.write_reg(Regs::Pc, entry).unwrap();
-                    // qemu.write_reg(Regs::Sp, sp & !0xf).unwrap(); // align stack
+                   
                     return SyscallHookResult::Skip(0);
                 }
                 return SyscallHookResult::Run;
             }
-            // SNAPSHOT_TAKEN.store(true, Ordering::Relaxed);
             
             let pc = HARNESS_PC.load(Ordering::Relaxed) as GuestAddr;
             let sp = HARNESS_SP.load(Ordering::Relaxed) as GuestAddr;
             let argc = HARNESS_ARGC.load(Ordering::Relaxed) as GuestAddr;
             let argv = HARNESS_ARGV.load(Ordering::Relaxed) as GuestAddr;
-            // eprintln!("resetting: argc={:#x} argv={:#x}", argc, argv);
+
             qemu.write_reg(Regs::Pc, pc).unwrap();
             qemu.write_reg(Regs::Sp, sp).unwrap();
             qemu.write_reg(Regs::Rdi, argc).unwrap();
             qemu.write_reg(Regs::Rsi, argv).unwrap();
+
             if let Some(cpu) = qemu.current_cpu() {
-                cpu.trigger_breakpoint(); // immediate stop path
+                cpu.trigger_breakpoint(); 
             }
             return SyscallHookResult::Skip(0);
         }
 
         n if n == syscalls::SYS_UNAME.num => {
-            // if !SNAPSHOT_TAKEN.load(Ordering::Relaxed) {
-            //     return SyscallHookResult::Run; // laat libc init draaien
-            // }
             let pc = qemu.read_reg(Regs::Pc).unwrap();
 
             write_fuzzed_bytes(
@@ -230,50 +210,32 @@ extern "C" fn pre_hooks(
         }
 
         n if n == syscalls::SYS_STAT.num || n == syscalls::SYS_NEWLSTAT.num || n == syscalls::SYS_LSTAT.num => {
-            // println!("HOOK UNAME");
             write_fuzzed_bytes(
                 &qemu,
                 _a1,
                 n,
                 syscalls::SYS_STAT.consume_size,
             );
-            // println!("end HOOK STAT");
             SyscallHookResult::Skip(0)
         }
 
         n if n == syscalls::SYS_STATX.num => {
-            // println!("HOOK UNAME");
             write_fuzzed_bytes(
                 &qemu,
                 _a4,
                 n,
                 syscalls::SYS_STATX.consume_size,
             );
-            // println!("end HOOK STAT");
             SyscallHookResult::Skip(0)
         }        
 
-        // n if n == syscalls::SYS_LSTAT.num => {
-        //     // println!("HOOK UNAME");
-        //     write_fuzzed_bytes(
-        //         &qemu,
-        //         _a1,
-        //         syscalls::SYS_LSTAT.num,
-        //         syscalls::SYS_STAT.consume_size,
-        //     );
-        //     // println!("end HOOK STAT");
-        //     SyscallHookResult::Skip(0)
-        // }
-
         n if n == syscalls::SYS_SYSINFO.num => {
-            // println!("IN HOOK SYSINFO");
             write_fuzzed_bytes(
                 &qemu,
                 _a0,
                 syscalls::SYS_SYSINFO.num,
                 syscalls::SYS_SYSINFO.consume_size,
             );
-            // println!("IN HOOK SYSINFOEND");
             SyscallHookResult::Skip(0)
         }
 
@@ -302,7 +264,6 @@ extern "C" fn pre_hooks(
         }
 
         n if n == syscalls::SYS_NANOSLEEP.num => {
-            // PRINTING.swap(true, Ordering::Relaxed);
             write_fuzzed_bytes(
                 &qemu,
                 _a1,
@@ -311,7 +272,6 @@ extern "C" fn pre_hooks(
             );
             let ret = write_ret_32(&qemu, syscalls::SYS_NANOSLEEP.num, 4);
             SyscallHookResult::Skip(ret as i64 as GuestAddr)
-            // SyscallHookResult::Skip(0)
         }
 
         n if n == syscalls::SYS_GETRUSAGE.num => {
@@ -325,8 +285,7 @@ extern "C" fn pre_hooks(
         }
 
         n if n == syscalls::SYS_SCHEDGETAFFINITY.num => {
-            // println!("HOOK sched getaffinity");
-
+           
             write_fuzzed_bytes(
                 &qemu,
                 _a2,
@@ -352,12 +311,12 @@ extern "C" fn pre_hooks(
             let nul_pos = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
             let path = std::str::from_utf8(&buf[..nul_pos]).unwrap_or("invalid_utf8");
             metrics::behavior_seen(n as i64, path);
-            // SyscallHookResult::Skip(-2i64 as GuestAddr) // returns ENOENT, so seems like the doesnt exist so it cant just start a new process that is not followed by the fuzzer. 
-            SyscallHookResult::Skip(0) 
+            SyscallHookResult::Skip(-2i64 as GuestAddr) // returns ENOENT, so seems like the doesnt exist so it cant just start a new process that is not followed by the fuzzer. 
+            // SyscallHookResult::Skip(0) 
         }
 
         n if n == syscalls::SYS_CHMOD.num => {
-            // let ret = write_ret_32(&qemu, n, syscalls::SYS_CHMOD.consume_size);
+            
             let mut buf = vec![0u8; 256];
             qemu.read_mem(_a0, &mut buf).unwrap();
             let nul_pos = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
@@ -367,7 +326,7 @@ extern "C" fn pre_hooks(
         }
 
         n if n == syscalls::SYS_UNLINK.num => {
-            // let ret = write_ret_32(&qemu, n, syscalls::SYS_CHMOD.consume_size);
+           
             let mut buf = vec![0u8; 256];
             qemu.read_mem(_a0, &mut buf).unwrap();
             let nul_pos = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
@@ -377,7 +336,7 @@ extern "C" fn pre_hooks(
         }
 
         n if n == syscalls::SYS_UNLINKAT.num => {
-            // let ret = write_ret_32(&qemu, n, syscalls::SYS_CHMOD.consume_size);
+            
             let mut buf = vec![0u8; 256];
             qemu.read_mem(_a1, &mut buf).unwrap();
             let nul_pos = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
@@ -439,7 +398,6 @@ extern "C" fn pre_hooks(
 
         n if n == syscalls::SYS_IOCTL.num => {
             let request_num = _a1 as u64; 
-            // eprintln!("request num {:#x}", request_num);
             let buf_dir = (request_num >> 30) & 0x3; 
             let buf_size = ((request_num >> 16) & 0x3FFF) as usize;
 
@@ -450,30 +408,20 @@ extern "C" fn pre_hooks(
                 0x8912 => 64,  // SIOCGIFCONF
                 0x8915 => 40,  // SIOCGIFADDR
                 0x8927 => 40,  // SIOCGIFHWADDR
-                _ if buf_size > 0 => buf_size,  
-                _ => 0,  
+                _ if buf_size > 0 => buf_size, _ => 0,  
             };
 
             if size>0 && _a2 != 0 {
-                // let size = if buf_size > 0 { buf_size } else { 128 };
                 write_fuzzed_bytes(&qemu, _a2, syscalls::SYS_IOCTL.num, size);
             }
             let ret = write_ret_32(&qemu, syscalls::SYS_IOCTL.num, syscalls::SYS_IOCTL.consume_size);
-            // eprintln!("HOOK IOCTL");
             SyscallHookResult::Skip(ret as i64 as GuestAddr)
         }
-
-        // n if n == syscalls::SYS_SOCKET.num => {
-        //     // let mut fuzzed_fd = (write_ret_32(&qemu, n, 4).wrapping_abs() % 900) + 100;
-        //     // SyscallHookResult::Skip(fuzzed_fd as GuestAddr)
-        //     // let ret = write_ret_32(&qemu, syscalls::SYS_SOCKET.num, syscalls::SYS_SOCKET.consume_size);
-        //     // SyscallHookResult::Skip(ret as GuestAddr)
-        //     SyscallHookResult::Run
-        // }
 
         n if n == syscalls::SYS_CONNECT.num || n == syscalls::SYS_BIND.num => {
             let mut buf = vec![0u8;16];
             let arguments = if qemu.read_mem(_a1, &mut buf).is_ok(){format!("{}.{}.{}.{}:{}", buf[4], buf[5], buf[6], buf[7], u16::from_be_bytes([buf[2],buf[3]]))}
+            
             else{
                 "unknown".to_string()
             };
@@ -485,9 +433,8 @@ extern "C" fn pre_hooks(
         n if n == syscalls::SYS_SENDTO.num => {
             let mut buf = vec![0u8;16];
             let arguments = if qemu.read_mem(_a4, &mut buf).is_ok(){format!("{}.{}.{}.{}:{}", buf[4], buf[5], buf[6], buf[7], u16::from_be_bytes([buf[2],buf[3]]))}
-            else{
-                "unknown".to_string()
-            };
+
+            else{ "unknown".to_string()};
             metrics::behavior_seen(n as i64, &arguments);
             let ret = write_ret_32(&qemu, n, syscalls::SYS_SENDTO.consume_size);
             SyscallHookResult::Skip(ret as i64 as GuestAddr)
@@ -500,17 +447,16 @@ extern "C" fn pre_hooks(
 
         n if n == syscalls::SYS_RECVFROM.num => {
             let size = _a2;
-            // let ret = write_ret_32(&qemu, syscalls::SYS_GETRANDOM.num, syscalls::SYS_GETRANDOM.consume_size);
             write_fuzzed_bytes(&qemu, _a1, syscalls::SYS_RECVFROM.num, size as usize);
             SyscallHookResult::Skip(size as GuestAddr)
         }
         
         n if n == syscalls::SYS_ACCEPT.num || n == syscalls::SYS_ACCEPT4.num => {
             let mut fuzzed_fd  = write_ret_32(&qemu, n, syscalls::SYS_ACCEPT.consume_size);
+
             if fuzzed_fd >= 0 && fuzzed_fd <= 10 {
                 fuzzed_fd = fuzzed_fd.wrapping_abs() + 0x100000;
             }
-            // eprintln!("[ACCEPT] hook fired, returning fd={}", fuzzed_fd);
             SyscallHookResult::Skip(fuzzed_fd as i64 as GuestAddr)
         }
 
@@ -520,7 +466,6 @@ extern "C" fn pre_hooks(
             }
 
             let size = _a1;
-            // let ret = write_ret_32(&qemu, syscalls::SYS_GETRANDOM.num, syscalls::SYS_GETRANDOM.consume_size);
             write_fuzzed_bytes(&qemu, _a0, syscalls::SYS_GETRANDOM.num, size as usize);
             SyscallHookResult::Skip(size as GuestAddr)
         }
@@ -551,7 +496,6 @@ extern "C" fn pre_hooks(
                     // checking if fd is faked
                     //fuzzing size
                     let size = fuzzed_size(syscalls::SYS_GETDENTS64.num, _a2);
-
                     //value
                     write_fuzzed_bytes(&qemu, _a1, syscalls::SYS_GETDENTS64.num, size as usize);
                     return SyscallHookResult::Skip(size as GuestAddr);
@@ -563,7 +507,6 @@ extern "C" fn pre_hooks(
         n if n == syscalls::SYS_NEWFSTATAT.num => {
             //classing path
             let path_class = classify_path(&qemu, _a1, n);
-            //  eprintln!("newfstatat class: {:?} addr: {:#x}", path_class, _a1);
             if path_class == class_path::PathRules::Env_resources {
                 //if path is env related
                 write_fuzzed_bytes(
@@ -582,11 +525,9 @@ extern "C" fn pre_hooks(
 
             FAKED_FD_MAPPING.with(|fd_map| {
                 let fd_map = fd_map.borrow();
-                // eprintln!("READ faked fd={} size={}", fd, _a2);
-
+               
                 if let Some(real_fd) = fd_map.get(&fd) {
                     //checking if fd is faked, in that case fuzzing
-                    // println!("HOOK UNAME");
                     write_fuzzed_bytes(&qemu, _a1, syscalls::SYS_READ.num, _a2 as usize);
                     return SyscallHookResult::Skip(_a2 as GuestAddr);
                 }
@@ -595,14 +536,11 @@ extern "C" fn pre_hooks(
         }
 
         n if n == syscalls::SYS_READLINK.num => {
+            
             //classing path
-            // println!("hook READLINK");
-
             let path_class = classify_path(&qemu, _a0, n);
 
             if path_class == class_path::PathRules::Env_resources {
-            // println!("hook READLINK");
-                // let size = fuzzed_size(syscalls::SYS_READLINK.num, _a2);
                 let size = _a2;
                 write_fuzzed_bytes(&qemu, _a1, syscalls::SYS_READLINK.num, size as usize);
                 return SyscallHookResult::Skip(size as GuestAddr);
@@ -615,8 +553,6 @@ extern "C" fn pre_hooks(
             let path_class = classify_path(&qemu, _a1, n);
 
             if path_class == class_path::PathRules::Env_resources {
-                // println!("hook READLINKAT");
-                // let size = fuzzed_size(syscalls::SYS_READLINKAT.num, _a3);
                 let size = _a3;
                 write_fuzzed_bytes(&qemu, _a2, syscalls::SYS_READLINKAT.num, size as usize);
                 return SyscallHookResult::Skip(size as GuestAddr);
@@ -665,22 +601,18 @@ extern "C" fn pre_hooks(
         }
 
         n if n == syscalls::SYS_FORK.num || n == syscalls::SYS_VFORK.num || n == syscalls::SYS_CLONE.num || n == syscalls::SYS_CLONE3.num || n == syscalls::SYS_SELECT.num || n == syscalls::SYS_PSELECT6.num => {
-            // PRINTING.swap(true, Ordering::Relaxed);
             SyscallHookResult::Skip(0) // child gets 0
-            // SyscallHookResult::Skip(1337) // child gets 0
         }
 
         n if n == syscalls::SYS_SETSID.num || n == syscalls::SYS_CHDIR.num || n == syscalls::SYS_CHROOT.num => {
-            // println!("SETSID\n");
             SyscallHookResult::Skip(0) // fake success
         }
 
         n if n == syscalls::SYS_SETRLIMIT.num => {
-            SyscallHookResult::Skip(0) // fake success, don't change fuzzer's limits
+            SyscallHookResult::Skip(0) // faking success
         }
 
         n if n == syscalls::SYS_MMAP.num => {
-            //FAILSAFE to chec if faked fd enters MMAP
             let fd = _a4 as i32;
 
             FAKED_FD_MAPPING.with(|fd_map| {
@@ -711,15 +643,12 @@ extern "C" fn post_hooks(
     _a7: GuestAddr,
 ) -> GuestAddr {
     let qemu = unsafe { libafl_qemu::Qemu::get_unchecked() };
-    // let env = crate::env_vector::get_current();
-
-    // return SyscallHookResult::Run;
+    
     match sys_num {
         n if n == syscalls::SYS_OPENAT.num || n == syscalls::SYS_OPENAT2.num => {
             //classify path
-            
             let path_class = classify_path(&qemu, _a1, n);
-            // eprintln!("openat class: {:?}", path_class);
+           
             if path_class == class_path::PathRules::Env_resources {
                 // faking fd
                 let mut fuzzed_bytes = crate::stream::consume_bytes(
@@ -743,10 +672,9 @@ extern "C" fn post_hooks(
         }
 
         n if n == syscalls::SYS_OPEN.num => {
-            //classify path
             
+            //classify path
             let path_class = classify_path(&qemu, _a0, n);
-            // eprintln!("open class: {:?}", path_class);
             if path_class == class_path::PathRules::Env_resources {
                 // faking fd
                 let mut fuzzed_bytes = crate::stream::consume_bytes(
@@ -771,10 +699,8 @@ extern "C" fn post_hooks(
 
         n if n == syscalls::SYS_SOCKET.num => { 
             REAL_SOCKETS.with(|s| s.borrow_mut().push(ret as i32)); 
-            // eprintln!("[POST SOCKET] fd={}", ret as i32);
             ret  as GuestAddr
         }
-
 
         n if n == syscalls::SYS_READ.num || n == syscalls::SYS_PREAD64.num => {
             let real_nbytes = (ret as usize).min(stream::BUCKET_SIZE);

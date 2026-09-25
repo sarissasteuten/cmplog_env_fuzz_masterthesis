@@ -1,12 +1,6 @@
 use crate::hooks_harness;
 use std::sync::atomic::Ordering;
-// use libafl::{
-//     executors::ExitKind,
-//     inputs::{BytesInput, HasTargetBytes},
-//     Error,
-// };
-// use libafl_bolts::AsSlice;
-// use libafl_qemu::{elf::EasyElf, ArchExtras, GuestAddr, GuestReg, MmapPerms, Qemu, Regs};
+
 use std::cell::RefCell;
 use std::collections::HashMap;
 use crate::stream;
@@ -43,16 +37,13 @@ impl Harness {
         let e_type = u16::from_le_bytes(file_bytes.get(16..18)?.try_into().ok()?);
         let vaddr = entry_point - qemu.load_addr();
         let file_offset = if e_type == 2 {
-            // eprintln!("non PIE");
             vaddr.saturating_sub(0x400000) as usize
         } else {
-            // eprintln!("PIE");
             vaddr as usize
         };
         
         let buf = file_bytes.get(file_offset..file_offset + 64)?;
-        // eprintln!("_start bytes: {:02x?}", &buf[..20]);
-        
+    
         for i in 0..buf.len().saturating_sub(6) {
             if buf[i] == 0x48 && buf[i+1] == 0xc7 && buf[i+2] == 0xc7 {
                 let imm = u32::from_le_bytes(buf[i+3..i+7].try_into().ok()?);
@@ -104,7 +95,6 @@ impl Harness {
         let elf = EasyElf::from_file(qemu.binary_path(), &mut elf_buffer)?;
         let elf_entry = elf.entry_point(qemu.load_addr()).expect("no entry point");
         if let Some(real_main) = Self::find_main_from_start(qemu, elf_entry) {
-            // eprintln!("found real main at {:#x}, updating HARNESS_ENTRY", real_main);
             hooks_harness::HARNESS_ENTRY.store(real_main as u64, Ordering::Relaxed);
         }
 
@@ -113,7 +103,7 @@ impl Harness {
             .map_err(|e| Error::unknown(format!("Failed to map fake ret: {e:}")))?;
             // .read_return_address()
             // .map_err(|e| Error::unknown(format!("Failed to read return address: {e:?}")))?;
-        log::info!("ret_addr = {ret_addr:#x}");
+        log::info!("ret_addr is {ret_addr:#x}");
         hooks_harness::HARNESS_FAKE_RET.store(ret_addr as u64, Ordering::Relaxed);
         
         qemu.set_breakpoint(ret_addr);
@@ -136,7 +126,6 @@ impl Harness {
        
         let argc: GuestReg = qemu.read_reg(Regs::Rdi).unwrap();
         let argv: GuestReg = qemu.read_reg(Regs::Rsi).unwrap();
-        // eprintln!("at entry_break: argc={:#x} argv={:#x}", argc, argv);
         hooks_harness::HARNESS_PC.store(pc as u64, Ordering::Relaxed);
         hooks_harness::HARNESS_SP.store(stack_ptr as u64, Ordering::Relaxed);
         hooks_harness::HARNESS_ARGC.store(argc as u64, Ordering::Relaxed);
@@ -177,7 +166,6 @@ impl Harness {
 
         hooks_harness::REAL_SOCKETS.with(|s| {
             let sockets = s.borrow();
-            // eprintln!("[RESET] closing {} sockets in reset", sockets.len());
             for fd in sockets.iter() {
                 unsafe { libc::close(*fd); }
             }
@@ -214,9 +202,6 @@ impl Harness {
         self.qemu
             .write_return_address(self.ret_addr)
             .map_err(|e| Error::unknown(format!("Failed to write return address: {e:?}")))?;
-
-        // hooks_harness::set_harness_ret_addr(self.ret_addr);
-        // moet deze twee hieronder nog ff checken:
 
         // self.qemu
         //     .write_function_argument(0, self.input_addr)

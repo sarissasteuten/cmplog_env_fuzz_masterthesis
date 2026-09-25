@@ -22,8 +22,6 @@ pub fn set_seed(path: &str) {
 
     for byte in buf.iter_mut() {
         *byte = rand::random::<u8>();
-        // *byte = 0x41;
-
     }
     std::fs::write(path, buf).expect("cannot writeeee seed\n");
 }
@@ -81,19 +79,16 @@ pub fn consume_bytes(syscall: i32, size: usize) -> Vec<u8> {
 
         let mut temp_vec = Vec::with_capacity(size);
 
-        // first tail chunk
         temp_vec.extend_from_slice(&bucket.bytes[start_pos..len]);
 
-        // middle full wraps
-        let mut remaining = size - (len - start_pos);
-        while remaining >= len {
+        let mut left = size - (len - start_pos);
+        while left >= len {
             temp_vec.extend_from_slice(&bucket.bytes[..]);
-            remaining -= len;
+            left -= len;
         }
 
-        // final head chunk
-        if remaining > 0 {
-            temp_vec.extend_from_slice(&bucket.bytes[0..remaining]);
+        if left > 0 {
+            temp_vec.extend_from_slice(&bucket.bytes[0..left]);
         }
 
         bucket.position = (start_pos + size) % len;

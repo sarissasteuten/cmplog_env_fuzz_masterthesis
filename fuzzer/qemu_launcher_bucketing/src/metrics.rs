@@ -7,19 +7,10 @@ use std::io::{Write, BufWriter};
 use std::sync::Mutex;
 
 static TIME_START: OnceLock<Instant> = OnceLock::new();
-static TIME_END: OnceLock<Instant> = OnceLock::new();
 
 static FOUND_SYSCALLS_TIME: OnceLock<DashMap<i64,u64>> = OnceLock::new(); // found syscalls with their time of whole fuzzing run 
 static BEHAVIOR_SYSCALLS: OnceLock<DashMap<String,u64>> = OnceLock::new(); // found syscalls with their time of whole fuzzing run 
-// static FOUND_SYSCALLS: OnceLock<DashMap<i64, ()>> = OnceLock::new(); // found syscalls in execution
 
-static LAST_COVERAGE_LOG: OnceLock<Mutex<Instant>> = OnceLock::new();
-static LAST_THROUGHPUT_LOG: OnceLock<Mutex<Instant>> = OnceLock::new();
-
-static UNIQUE_SYSCALLS: AtomicU64 = AtomicU64::new(0); 
-static CONNECT: AtomicBool = AtomicBool::new(false); 
-static EXECVE: AtomicBool = AtomicBool::new(false);
-static FORK: AtomicBool = AtomicBool::new(false);
 
 static RESULTS_FILE: OnceLock<Mutex<BufWriter<File>>> = OnceLock::new();
 static SYSCALLS_ALL_FILE: OnceLock<Mutex<BufWriter<File>>> = OnceLock::new();
@@ -54,10 +45,6 @@ pub fn init_results_file(){
 pub fn init_log_files(client_id:u32){
     let dir = format!("syscall_results/client_{}", client_id);
     std::fs::create_dir_all(&dir).unwrap();
-    // let syscalls_all = File::create("syscalls_all.log").unwrap();
-    // let mut title = BufWriter::new(syscalls_all);
-    // writeln!(title, "syscall_num,time,arg0,arg1,arg2,arg3,arg4,arg5,arg6,arg7").ok();
-    // SYSCALLS_ALL_FILE.get_or_init(|| Mutex::new(title));
 
     let syscalls_seen = File::create(format!("{}/syscalls_seen_{}.log",dir, client_id)).unwrap();
     let mut title2 = BufWriter::new(syscalls_seen);
@@ -69,17 +56,6 @@ pub fn init_log_files(client_id:u32){
     writeln!(title3, "syscall_num,time,arguments").ok();
     BEHAVIOR_SEEN.get_or_init(|| Mutex::new(title3));
 }
-
-// pub fn syscall_all(num: i64, arg0: u64, arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64, arg6: u64, arg7: u64){
-//     let time = time_spend();
-    
-       
-//     // eprintln!("syscall_all,{},{}", num, time);
-//     if let Some(file) = SYSCALLS_ALL_FILE.get() { 
-//         let mut f = file.lock().unwrap(); 
-//         writeln!(f, "{},{},{},{},{},{},{},{},{},{}", num, time, arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7).ok(); 
-//     }
-// }
 
 pub fn syscall_seen(num: i64, arg0: u64, arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64, arg6: u64, arg7: u64){
     let time = time_spend();
