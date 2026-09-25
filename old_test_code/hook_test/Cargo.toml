@@ -1,8 +1,0 @@
-[package]
-name = "hook_test"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-libafl_qemu = { path = "/home/sarissa/tools/LibAFL/crates/libafl_qemu", features = ["usermode"] }
-libafl_qemu_sys = { path = "/home/sarissa/tools/LibAFL/crates/libafl_qemu/libafl_qemu_sys" }
